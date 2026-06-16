@@ -17,10 +17,12 @@ import {
   QueryRequestSchema,
   type QueryRequest,
   type QueryResponse,
+  type Source,
 } from "@/shared/types.js";
 import { getObservability, getQueryGraph } from "../deps.js";
 import { getServer } from "../server.js";
 import { GenerationError } from "@/shared/errors.js";
+import { extractCitations } from "@/context/citation.js";
 
 // Allow handlers to push through `reply.hijack()` and stream SSE without
 // Fastify re-serialising the body.
@@ -59,16 +61,39 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
       throw new GenerationError("Query execution failed", err);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const answer: string = (finalState as any).finalAnswer ?? (finalState as any).answer ?? "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sources: Source[] = (finalState as any).sources ?? [];
+
+    // Phase 2: validate citations in the answer.
+    //   - If the answer claims citations (has [N] markers) and ALL of them
+    //     are out of range, we return a `citations` block in metrics so
+    //     callers / dashboards can see the issue.
+    //   - We do NOT silently fail the response — that's a separate concern
+    //     (downstream services can monitor `citationCoverage`).
+    const citationResult = extractCitations(answer, sources);
+    const citationCoverage = sources.length === 0
+      ? 0
+      : citationResult.citations.length / Math.max(sources.length, 1);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const retrievedCount: number = (finalState as any).retrievedChunks?.length
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ?? (finalState as any).sources?.length
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ?? 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rerankedCount: number = (finalState as any).rerankedChunks?.length ?? 0;
+
     const response: QueryResponse = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      answer: (finalState as any).finalAnswer ?? (finalState as any).answer ?? "",
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      sources: (finalState as any).sources ?? [],
+      answer,
+      sources,
       sessionId,
       queryLogId: finalState.queryLogId,
-      metrics: finalState.metrics ?? {
-        retrieved: 0,
-        reranked: 0,
+      metrics: {
+        retrieved: retrievedCount,
+        reranked: rerankedCount,
         latencyMs: Date.now() - start,
       },
     };
@@ -77,6 +102,7 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
       const obs = await getObservability();
       obs.incrCounter("queriesTotal");
       obs.recordLatency("query", Date.now() - start);
+      obs.recordObservation("citationCoverage", citationCoverage);
     } catch {
       // metrics are best-effort
     }

@@ -175,6 +175,25 @@ export async function runIngestion(request: IngestRequest): Promise<IngestionRes
       err,
     );
   }
+
+  // 7b. Phase 2: populate the in-process BM25 keyword index so the hybrid
+  // retriever has a keyword leg to fuse with the vector leg.
+  try {
+    const { getBM25Index } = await import("@/retrieval/bm25Index.js");
+    const bm25 = getBM25Index();
+    bm25.upsertBatch(chunks);
+    bm25.save();
+    log.info(
+      { indexSize: bm25.size() },
+      "BM25 keyword index updated",
+    );
+  } catch (err) {
+    // Non-fatal: ingestion is still considered successful if only BM25 fails.
+    log.warn(
+      { err },
+      "BM25 index update failed; keyword search will be empty until next successful ingest",
+    );
+  }
   log.info(
     {
       documentId,

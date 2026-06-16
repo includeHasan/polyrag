@@ -1,17 +1,20 @@
 /**
- * KeywordRetriever — BM25 over an Elasticsearch index.
+ * KeywordRetriever — BM25 keyword search.
  *
- * Phase 2 scaffold: the retriever is wired to the ES client factory
- * `@/database/elasticsearch.js`, but the current implementation returns an
- * empty array when the configured client is missing or when an explicit
- * `disabled` flag is set. The full query-body construction lives behind a
- * future PR; the public contract is stable.
+ * Phase 2 implementation backed by the in-process `InProcessBM25Index` (see
+ * `./bm25Index.ts`). The index is populated by the ingestion pipeline and
+ * persisted to `storage/bm25-index.json` so it survives restarts.
+ *
+ * For very large corpora (millions of chunks), swap to Elasticsearch by
+ * changing the body of `retrieve` to call `keywordSearch()` from
+ * `@/database/elasticsearch.js` instead. The `Retriever` contract stays
+ * the same.
  */
-import { getEsClient } from "@/database/elasticsearch.js";
-import { RetrievalError } from "../shared/errors.js";
-import { logger } from "../shared/logger.js";
-import type { Chunk, QueryUnderstanding } from "../shared/types.js";
+import { logger } from "@/shared/logger.js";
+import { RetrievalError } from "@/shared/errors.js";
+import type { Chunk, QueryUnderstanding } from "@/shared/types.js";
 import { BaseRetriever, type RetrieveOptions } from "./base.js";
+import { getBM25Index } from "./bm25Index.js";
 
 export class KeywordRetriever extends BaseRetriever {
   readonly name = "keyword";
@@ -19,27 +22,22 @@ export class KeywordRetriever extends BaseRetriever {
   async retrieve(
     query: string,
     _understanding: QueryUnderstanding,
-    _options?: RetrieveOptions,
+    options?: RetrieveOptions,
   ): Promise<Chunk[]> {
     try {
-      const client = getEsClient();
-      if (!client) {
-        logger.debug(
-          { retriever: this.name },
-          "Elasticsearch not configured; returning empty results",
-        );
-        return [];
-      }
-
-      // Phase 2: build a multi_match query against the chunks index and
-      // map the top-K hits into `Chunk` objects. Until that wiring lands,
-      // we log and return an empty list rather than throwing — this keeps
-      // the retriever pluggable in the graph without breaking Phase 1.
+      const index = getBM25Index();
+      const topK = options?.topK ?? 10;
+      const hits = index.search(query, topK);
       logger.debug(
-        { retriever: this.name, queryLen: query.length },
-        "KeywordRetriever invoked (Phase 2 stub)",
+        {
+          retriever: this.name,
+          queryTokens: query.length,
+          indexSize: index.size(),
+          hits: hits.length,
+        },
+        "KeywordRetriever complete",
       );
-      return [];
+      return hits.map((h) => h.chunk);
     } catch (err) {
       if (err instanceof RetrievalError) throw err;
       throw new RetrievalError(
@@ -49,3 +47,6 @@ export class KeywordRetriever extends BaseRetriever {
     }
   }
 }
+
+/** Re-export so the ingestion pipeline can populate the index. */
+export { getBM25Index } from "./bm25Index.js";

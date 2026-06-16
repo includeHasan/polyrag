@@ -117,7 +117,8 @@ export async function runEvaluation(
 ): Promise<EvaluationSummary> {
   const started = Date.now();
   const judge = options.judge ?? new LLMJudge();
-  const skipJudge = options.skipJudge ?? true; // Phase 1 default
+  // Phase 2: judge is on by default. Pass `skipJudge: true` to disable.
+  const skipJudge = options.skipJudge ?? false;
 
   const reports: PerSampleReport[] = [];
 

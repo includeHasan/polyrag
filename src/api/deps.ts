@@ -33,6 +33,7 @@ export interface ObservabilityModule {
   getMetrics(): MetricsSnapshot;
   recordLatency(name: string, ms: number): void;
   incrCounter(name: string, n?: number): void;
+  recordObservation(name: string, value: number): void;
 }
 
 let _observability: ObservabilityModule | null = null;
