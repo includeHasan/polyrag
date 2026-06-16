@@ -45,3 +45,9 @@ prisma/.cache/
 # Ingested test fixtures (keep the small sample.md checked in, ignore larger fixtures)
 docs/fixtures/*.pdf
 docs/fixtures/*.docx
+
+# Local-only Claude / IDE settings (contain API keys)
+.claude/settings.local.json
+
+# Local scratch / concept docs
+/concepts
