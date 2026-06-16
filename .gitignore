@@ -51,3 +51,4 @@ docs/fixtures/*.docx
 
 # Local scratch / concept docs
 /concepts
+bin/qdrant.exe
