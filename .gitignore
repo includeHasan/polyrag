@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Env files
+.env
+.env.local
+.env.*.local
+# Keep .env.example in version control
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test / coverage
+coverage/
+.vitest-cache/
+test-results/
+playwright-report/
+
+# Runtime / data (created by podman / qdrant / prisma)
+data/
+storage/
+.qdrant-initialized
+prisma/migrations/dev.db*
+prisma/.cache/
+
+# Ingested test fixtures (keep the small sample.md checked in, ignore larger fixtures)
+docs/fixtures/*.pdf
+docs/fixtures/*.docx

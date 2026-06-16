@@ -1,0 +1,10 @@
+{
+  "$schema": "https://langchain-ai.github.io/langgraph/config-schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "query-agent": "./src/agents/query/index.ts:graph",
+    "ingestion-agent": "./src/agents/ingestion/index.ts:graph"
+  },
+  "env": "./.env",
+  "node_version": "20"
+}

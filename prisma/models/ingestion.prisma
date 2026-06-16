@@ -1,0 +1,38 @@
+// ============================================================================
+// prisma/models/ingestion.prisma
+// Async ingestion job tracking (PRD §16 POST /api/ingest).
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum IngestionJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model IngestionJob {
+  id           String            @id @default(uuid()) @db.Uuid
+  documentId   String?           @db.Uuid
+  source       DocumentSource
+  sourceUri    String?
+  status       IngestionJobStatus @default(QUEUED)
+  chunkCount   Int               @default(0)
+  tokensUsed   Int               @default(0)
+  durationMs   Int?
+  errorMessage String?
+  metadata     Json              @default("{}")
+
+  requestedById String?  @db.Uuid
+  queuedAt      DateTime @default(now()) @db.Timestamptz
+  startedAt     DateTime? @db.Timestamptz
+  completedAt   DateTime? @db.Timestamptz
+
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([documentId])
+  @@index([queuedAt])
+  @@map("ingestion_jobs")
+}

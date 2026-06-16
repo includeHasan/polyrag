@@ -1,0 +1,32 @@
+// ============================================================================
+// prisma/models/session.prisma
+// Long-term user preferences and chat sessions (PRD §13).
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  title     String?
+  isActive  Boolean  @default(true)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+  expiresAt DateTime? @db.Timestamptz
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("sessions")
+}
+
+model UserPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@map("user_preferences")
+}

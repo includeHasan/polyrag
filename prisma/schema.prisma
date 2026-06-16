@@ -1,0 +1,285 @@
+// ============================================================================
+// GENERATED FILE — DO NOT EDIT.
+// Source: prisma/models/*.prisma (concatenated by prisma/build.ts).
+// To regenerate: npm run prisma:build
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- document.prisma ----
+
+// ============================================================================
+// prisma/models/document.prisma
+// Source documents, their storage location, and per-user permissions.
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+enum DocumentSource {
+  PDF
+  DOCX
+  TXT
+  MD
+  URL
+  NOTION
+  CONFLUENCE
+  GITHUB
+  DATABASE
+  API
+  CSV
+  EXCEL
+  OTHER
+}
+
+model Document {
+  id              String         @id @default(uuid()) @db.Uuid
+  title           String
+  source          DocumentSource
+  sourceUri       String?
+  storageKey      String?        // S3 key for the raw blob
+  status          DocumentStatus @default(PENDING)
+  mimeType        String?
+  sizeBytes       Int?
+  checksum        String?
+  language        String?        @default("en")
+  chunkCount      Int            @default(0)
+  tokenCount      Int            @default(0)
+  department      String?
+  tags            String[]       @default([])
+  metadata        Json           @default("{}")
+  errorMessage    String?
+
+  authorId    String?  @db.Uuid
+  uploaderId  String?  @db.Uuid
+  tenantId    String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+  indexedAt   DateTime? @db.Timestamptz
+
+  author           User?               @relation("DocumentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  uploader         User?               @relation("DocumentUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  ingestionJobs    IngestionJob[]
+  permissions      DocumentPermission[]
+
+  @@index([status])
+  @@index([tenantId])
+  @@index([source])
+  @@index([createdAt])
+  @@index([checksum])
+  @@map("documents")
+}
+
+/// Per-document ACL. When a user has no DocumentPermission rows for a document,
+/// default policy applies (deny in Phase 5 multi-tenant mode; allow in dev).
+model DocumentPermission {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  userId     String   @db.Uuid
+  canRead    Boolean  @default(true)
+  canWrite   Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  grantedAt  DateTime @default(now()) @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+  @@map("document_permissions")
+}
+
+// ---- ingestion.prisma ----
+
+// ============================================================================
+// prisma/models/ingestion.prisma
+// Async ingestion job tracking (PRD §16 POST /api/ingest).
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum IngestionJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model IngestionJob {
+  id           String            @id @default(uuid()) @db.Uuid
+  documentId   String?           @db.Uuid
+  source       DocumentSource
+  sourceUri    String?
+  status       IngestionJobStatus @default(QUEUED)
+  chunkCount   Int               @default(0)
+  tokensUsed   Int               @default(0)
+  durationMs   Int?
+  errorMessage String?
+  metadata     Json              @default("{}")
+
+  requestedById String?  @db.Uuid
+  queuedAt      DateTime @default(now()) @db.Timestamptz
+  startedAt     DateTime? @db.Timestamptz
+  completedAt   DateTime? @db.Timestamptz
+
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([documentId])
+  @@index([queuedAt])
+  @@map("ingestion_jobs")
+}
+
+// ---- query.prisma ----
+
+// ============================================================================
+// prisma/models/query.prisma
+// Query audit log and feedback (PRD §16 POST /api/query, /api/feedback).
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+model QueryLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  sessionId   String?  @db.Uuid
+  userId      String?  @db.Uuid
+  query       String
+  answer      String?
+  intent      String?
+  retrievedChunkIds String[] @default([])
+  rerankedChunkIds  String[] @default([])
+  sourceCount Int      @default(0)
+  llmModel    String?
+  promptTokens    Int?
+  completionTokens Int?
+  totalTokens  Int?
+  costUsd     Float?
+  latencyMs   Int?
+  groundednessScore Float?
+  relevanceScore    Float?
+  metadata    Json     @default("{}")
+  errorMessage String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("query_logs")
+}
+
+model Feedback {
+  id          String   @id @default(uuid()) @db.Uuid
+  queryLogId  String   @db.Uuid
+  userId      String?  @db.Uuid
+  rating      Int      // 1-5
+  thumbsUp    Boolean?
+  comment     String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([queryLogId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("feedback")
+}
+
+// ---- session.prisma ----
+
+// ============================================================================
+// prisma/models/session.prisma
+// Long-term user preferences and chat sessions (PRD §13).
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  title     String?
+  isActive  Boolean  @default(true)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+  expiresAt DateTime? @db.Timestamptz
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("sessions")
+}
+
+model UserPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@map("user_preferences")
+}
+
+// ---- user.prisma ----
+
+// ============================================================================
+// prisma/models/user.prisma
+// Users, roles, and permissions.
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String?
+  displayName  String?
+  isActive     Boolean  @default(true)
+  tenantId     String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  roles                UserRoleAssignment[]
+  authoredDocuments    Document[]            @relation("DocumentAuthor")
+  uploadedDocuments    Document[]            @relation("DocumentUploader")
+  queryLogs            QueryLog[]
+  feedback             Feedback[]
+  documentPermissions  DocumentPermission[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+/// A user may have multiple roles within a tenant.
+model UserRoleAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  role      UserRole
+  grantedAt DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
+}

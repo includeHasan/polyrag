@@ -1,0 +1,85 @@
+// ============================================================================
+// prisma/models/document.prisma
+// Source documents, their storage location, and per-user permissions.
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+enum DocumentSource {
+  PDF
+  DOCX
+  TXT
+  MD
+  URL
+  NOTION
+  CONFLUENCE
+  GITHUB
+  DATABASE
+  API
+  CSV
+  EXCEL
+  OTHER
+}
+
+model Document {
+  id              String         @id @default(uuid()) @db.Uuid
+  title           String
+  source          DocumentSource
+  sourceUri       String?
+  storageKey      String?        // S3 key for the raw blob
+  status          DocumentStatus @default(PENDING)
+  mimeType        String?
+  sizeBytes       Int?
+  checksum        String?
+  language        String?        @default("en")
+  chunkCount      Int            @default(0)
+  tokenCount      Int            @default(0)
+  department      String?
+  tags            String[]       @default([])
+  metadata        Json           @default("{}")
+  errorMessage    String?
+
+  authorId    String?  @db.Uuid
+  uploaderId  String?  @db.Uuid
+  tenantId    String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+  indexedAt   DateTime? @db.Timestamptz
+
+  author           User?               @relation("DocumentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  uploader         User?               @relation("DocumentUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+  ingestionJobs    IngestionJob[]
+  permissions      DocumentPermission[]
+
+  @@index([status])
+  @@index([tenantId])
+  @@index([source])
+  @@index([createdAt])
+  @@index([checksum])
+  @@map("documents")
+}
+
+/// Per-document ACL. When a user has no DocumentPermission rows for a document,
+/// default policy applies (deny in Phase 5 multi-tenant mode; allow in dev).
+model DocumentPermission {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  userId     String   @db.Uuid
+  canRead    Boolean  @default(true)
+  canWrite   Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  grantedAt  DateTime @default(now()) @db.Timestamptz
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+  @@map("document_permissions")
+}

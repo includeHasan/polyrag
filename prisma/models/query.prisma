@@ -1,0 +1,53 @@
+// ============================================================================
+// prisma/models/query.prisma
+// Query audit log and feedback (PRD §16 POST /api/query, /api/feedback).
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+model QueryLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  sessionId   String?  @db.Uuid
+  userId      String?  @db.Uuid
+  query       String
+  answer      String?
+  intent      String?
+  retrievedChunkIds String[] @default([])
+  rerankedChunkIds  String[] @default([])
+  sourceCount Int      @default(0)
+  llmModel    String?
+  promptTokens    Int?
+  completionTokens Int?
+  totalTokens  Int?
+  costUsd     Float?
+  latencyMs   Int?
+  groundednessScore Float?
+  relevanceScore    Float?
+  metadata    Json     @default("{}")
+  errorMessage String?
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("query_logs")
+}
+
+model Feedback {
+  id          String   @id @default(uuid()) @db.Uuid
+  queryLogId  String   @db.Uuid
+  userId      String?  @db.Uuid
+  rating      Int      // 1-5
+  thumbsUp    Boolean?
+  comment     String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([queryLogId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("feedback")
+}

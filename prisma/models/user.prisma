@@ -1,0 +1,47 @@
+// ============================================================================
+// prisma/models/user.prisma
+// Users, roles, and permissions.
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String?
+  displayName  String?
+  isActive     Boolean  @default(true)
+  tenantId     String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  roles                UserRoleAssignment[]
+  authoredDocuments    Document[]            @relation("DocumentAuthor")
+  uploadedDocuments    Document[]            @relation("DocumentUploader")
+  queryLogs            QueryLog[]
+  feedback             Feedback[]
+  documentPermissions  DocumentPermission[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+/// A user may have multiple roles within a tenant.
+model UserRoleAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  role      UserRole
+  grantedAt DateTime @default(now()) @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("user_roles")
+}
