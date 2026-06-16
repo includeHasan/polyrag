@@ -145,6 +145,15 @@ export class InProcessBM25Index {
   }
 
   /**
+   * Look up a chunk by id. Returns the cached `Chunk` payload or `undefined`
+   * if the chunk is not in the index. Used by the knowledge-graph retriever
+   * to hydrate full chunk records from a chunkId reference.
+   */
+  getChunk(chunkId: string): Chunk | undefined {
+    return this.docs.get(chunkId)?.chunk;
+  }
+
+  /**
    * BM25 search. Returns top-k hits sorted by descending score.
    * If no docs match, returns an empty array.
    */

@@ -1,0 +1,73 @@
+// ============================================================================
+// prisma/models/knowledge-graph.prisma
+// Knowledge-graph tables (Phase 4): extracted entities, their mentions inside
+// chunks, and typed relations between entities. Backed by Postgres.
+// Composed into schema.prisma by prisma/build.ts.
+//
+// NOTE: id columns are `text` (not Uuid) because the extractor uses
+// deterministic keys like `${documentId}::${TYPE}::${name}` to make
+// re-ingestion idempotent. Cross-references between the three tables are
+// enforced via foreign-key relations, not type.
+// ============================================================================
+
+/// A single extracted entity (a person, organization, concept, etc.) that
+/// appears in one or more documents. The `name` is the canonical surface form
+/// used for matching; `type` is a free-form taxonomy (PERSON, ORG, CONCEPT…).
+model Entity {
+  id         String   @id
+  tenantId   String?
+  name       String
+  type       String
+  documentId String?
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  mentions  EntityMention[]
+  outgoing  EntityRelation[] @relation("EntityRelationFrom")
+  incoming  EntityRelation[] @relation("EntityRelationTo")
+
+  @@index([name])
+  @@index([tenantId])
+  @@index([type])
+  @@index([documentId])
+  @@map("entities")
+}
+
+/// A pointer from an entity to a specific chunk where the entity was
+/// mentioned. `position` is the character offset (best-effort) of the first
+/// occurrence within the chunk; `context` is a short surrounding snippet
+/// for human review and debugging.
+model EntityMention {
+  id       String   @id @default(uuid())
+  entityId String
+  chunkId  String
+  position Int      @default(0)
+  context  String   @default("")
+
+  entity   Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+  @@index([chunkId])
+  @@map("entity_mentions")
+}
+
+/// A directed, typed relation between two entities (e.g. Alice WORKS_FOR
+/// Acme). `weight` is a float that callers can populate from the LLM
+/// confidence or co-occurrence counts (default 1.0).
+model EntityRelation {
+  id           String   @id @default(uuid())
+  fromEntityId String
+  toEntityId   String
+  relation     String
+  weight       Float    @default(1.0)
+  documentId   String?
+  createdAt    DateTime @default(now()) @db.Timestamptz
+
+  fromEntity   Entity   @relation("EntityRelationFrom", fields: [fromEntityId], references: [id], onDelete: Cascade)
+  toEntity     Entity   @relation("EntityRelationTo",   fields: [toEntityId],   references: [id], onDelete: Cascade)
+
+  @@index([fromEntityId])
+  @@index([toEntityId])
+  @@index([relation])
+  @@index([documentId])
+  @@map("entity_relations")
+}

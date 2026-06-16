@@ -11,6 +11,8 @@ import { reindexRoutes } from "./reindex.js";
 import { feedbackRoutes } from "./feedback.js";
 import { evaluateRoutes } from "./evaluate.js";
 import { sessionRoutes } from "./sessions.js";
+import { billingRoutes } from "./billing.js";
+import { oauth2Routes } from "./oauth2.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await Promise.all([
@@ -23,6 +25,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     feedbackRoutes(app),
     evaluateRoutes(app),
     sessionRoutes(app),
+    billingRoutes(app),
+    oauth2Routes(app),
   ]);
 }
 
@@ -36,4 +40,6 @@ export {
   feedbackRoutes,
   evaluateRoutes,
   sessionRoutes,
+  billingRoutes,
+  oauth2Routes,
 };

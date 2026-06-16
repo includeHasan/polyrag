@@ -31,6 +31,12 @@ const concatReducer = <T,>(current: T[], update: T[]): T[] => [
 const definition: any = {
   query: z.string(),
   sessionId: z.string().optional(),
+  // Phase 5: identity / multi-tenancy. Threaded in by the API route so the
+  // retrieve node can apply tenant filters and per-document ACLs.
+  tenantId: z.string().nullable().optional(),
+  userId: z.string().nullable().optional(),
+  // Full AuthUser (shape is loose; cast to unknown to keep zod happy).
+  user: z.any().optional(),
   understanding: QueryUnderstandingSchema.optional(),
   retrievedChunks: new ReducedValue(z.array(ChunkSchema) as any, {
     reducer: concatReducer<z.infer<typeof ChunkSchema>>,

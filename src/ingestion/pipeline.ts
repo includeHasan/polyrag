@@ -194,6 +194,20 @@ export async function runIngestion(request: IngestRequest): Promise<IngestionRes
       "BM25 index update failed; keyword search will be empty until next successful ingest",
     );
   }
+
+  // 7c. Phase 4: extract entities/relations and populate the knowledge graph.
+  //      Best-effort: any LLM or DB error is logged and swallowed so a
+  //      failing KG pass never blocks ingestion.
+  try {
+    const { extractAndStoreEntities } = await import("./kgExtractor.js");
+    const tenantId = (doc.metadata?.tenantId as string | undefined) ?? null;
+    await extractAndStoreEntities(documentId, tenantId, chunks);
+  } catch (err) {
+    log.warn(
+      { err },
+      "KG extraction step failed; KG retrieval will be empty for this document",
+    );
+  }
   log.info(
     {
       documentId,

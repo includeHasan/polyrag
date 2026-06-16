@@ -3,7 +3,8 @@
   "dependencies": ["."],
   "graphs": {
     "query-agent": "./src/agents/query/index.ts:graph",
-    "ingestion-agent": "./src/agents/ingestion/index.ts:graph"
+    "ingestion-agent": "./src/agents/ingestion/index.ts:graph",
+    "research-agent": "./src/agents/research/index.ts:graph"
   },
   "env": "./.env",
   "node_version": "20"

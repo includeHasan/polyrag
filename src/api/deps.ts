@@ -148,6 +148,12 @@ export interface QueryGraphState {
   sessionId?: string;
   filters?: Record<string, unknown>;
   topK?: number;
+  /** Phase 5: tenant scope for multi-tenant isolation in the retrieve node. */
+  tenantId?: string | null;
+  /** Phase 5: calling user id (used for ACL filtering and metering). */
+  userId?: string | null;
+  /** Phase 5: full AuthUser payload, when available. */
+  user?: unknown;
   answer?: string;
   sources?: Source[];
   metrics?: {
@@ -157,6 +163,8 @@ export interface QueryGraphState {
     latencyMs?: number;
   };
   queryLogId?: string;
+  /** Free-form metadata blob used by downstream graph nodes. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface CompiledQueryGraph {

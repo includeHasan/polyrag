@@ -8,6 +8,12 @@
  *   with `streamMode: "messages"` and pipes Server-Sent Events
  *   (`text/event-stream`).
  *
+ * Phase 5 additions:
+ *   - Rate-limit gate at the start (429 + `Retry-After` on deny).
+ *   - Per-tenant usage metering after the response.
+ *   - `tenantId` + `userId` threaded into the graph state so the
+ *     `retrieve` node can apply multi-tenant filters.
+ *
  * The graph is fetched from the server singleton (set via
  * `setQueryGraph`); this keeps the route testable.
  */
@@ -21,109 +27,154 @@ import {
 } from "@/shared/types.js";
 import { getObservability, getQueryGraph } from "../deps.js";
 import { getServer } from "../server.js";
-import { GenerationError } from "@/shared/errors.js";
+import { GenerationError, AuthError } from "@/shared/errors.js";
 import { extractCitations } from "@/context/citation.js";
+import { rateLimitPreHandler } from "../middleware/rateLimit.js";
+import { getRateLimiter, RateLimiter } from "@/security/rateLimit.js";
+import { getUsageMeter } from "@/observability/metering.js";
+import { logger } from "@/shared/logger.js";
 
 // Allow handlers to push through `reply.hijack()` and stream SSE without
 // Fastify re-serialising the body.
 type RawReply = FastifyReply & { raw: NodeJS.WritableStream };
 
 export async function queryRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/query", async (request, reply) => {
-    const start = Date.now();
-    const parsed = QueryRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      throw parsed.error;
-    }
-    const body = parsed.data as QueryRequest;
-    const sessionId = body.sessionId ?? randomUUID();
-    const server = await getServer();
-    const graph = server.graph ?? (await getQueryGraph());
+  app.post(
+    "/api/query",
+    {
+      preHandler: rateLimitPreHandler({ action: "query" }),
+    },
+    async (request, reply) => {
+      const start = Date.now();
+      const parsed = QueryRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw parsed.error;
+      }
+      const body = parsed.data as QueryRequest;
+      const sessionId = body.sessionId ?? randomUUID();
+      const server = await getServer();
+      const graph = server.graph ?? (await getQueryGraph());
 
-    // ---- Streaming -------------------------------------------------------
-    if (body.stream) {
-      return streamQuery(request, reply, body, sessionId, graph, start);
-    }
+      // ---- User / tenant context -----------------------------------------
+      const user = request.user;
+      if (!user) {
+        throw new AuthError("Authentication required");
+      }
+      const userId = (user.sub as string | undefined) ?? null;
+      const tenantId =
+        (user.tenantId as string | undefined) ??
+        (user.tenant_id as string | undefined) ??
+        null;
 
-    // ---- Non-streaming ---------------------------------------------------
-    let finalState;
-    try {
-      finalState = await graph.invoke(
-        {
-          query: body.query,
-          sessionId,
-          filters: body.filters,
-          topK: body.topK,
+      // ---- Rate-limit consume (debit the bucket) -------------------------
+      // The preHandler already denied the request if the bucket was empty.
+      // We debit on every accepted call so the limiter sees real traffic.
+      const limiter: RateLimiter = getRateLimiter();
+      await limiter.consume(tenantId, userId, "query");
+
+      // ---- Streaming -----------------------------------------------------
+      if (body.stream) {
+        return streamQuery(request, reply, body, sessionId, graph, start, {
+          tenantId,
+          userId,
+        });
+      }
+
+      // ---- Non-streaming -------------------------------------------------
+      let finalState;
+      try {
+        finalState = await graph.invoke(
+          {
+            query: body.query,
+            sessionId,
+            filters: body.filters,
+            topK: body.topK,
+            tenantId,
+            userId,
+            user,
+          },
+          { configurable: { thread_id: sessionId } },
+        );
+      } catch (err) {
+        throw new GenerationError("Query execution failed", err);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const answer: string = (finalState as any).finalAnswer ?? (finalState as any).answer ?? "";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sources: Source[] = (finalState as any).sources ?? [];
+
+      // Phase 2: validate citations in the answer.
+      const citationResult = extractCitations(answer, sources);
+      const citationCoverage = sources.length === 0
+        ? 0
+        : citationResult.citations.length / Math.max(sources.length, 1);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const retrievedCount: number = (finalState as any).retrievedChunks?.length
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?? (finalState as any).sources?.length
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?? 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rerankedCount: number = (finalState as any).rerankedChunks?.length ?? 0;
+      const llmTokens: number | undefined =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (finalState as any).llmTokens ??
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (finalState as any).metrics?.llmTokens ??
+        undefined;
+
+      const response: QueryResponse = {
+        answer,
+        sources,
+        sessionId,
+        queryLogId: finalState.queryLogId,
+        metrics: {
+          retrieved: retrievedCount,
+          reranked: rerankedCount,
+          llmTokens,
+          latencyMs: Date.now() - start,
         },
-        { configurable: { thread_id: sessionId } },
-      );
-    } catch (err) {
-      throw new GenerationError("Query execution failed", err);
-    }
+      };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const answer: string = (finalState as any).finalAnswer ?? (finalState as any).answer ?? "";
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sources: Source[] = (finalState as any).sources ?? [];
+      try {
+        const obs = await getObservability();
+        obs.incrCounter("queriesTotal");
+        obs.recordLatency("query", Date.now() - start);
+        obs.recordObservation("citationCoverage", citationCoverage);
+      } catch {
+        // metrics are best-effort
+      }
 
-    // Phase 2: validate citations in the answer.
-    //   - If the answer claims citations (has [N] markers) and ALL of them
-    //     are out of range, we return a `citations` block in metrics so
-    //     callers / dashboards can see the issue.
-    //   - We do NOT silently fail the response — that's a separate concern
-    //     (downstream services can monitor `citationCoverage`).
-    const citationResult = extractCitations(answer, sources);
-    const citationCoverage = sources.length === 0
-      ? 0
-      : citationResult.citations.length / Math.max(sources.length, 1);
+      // ---- Usage metering (async, non-blocking) -------------------------
+      const meter = getUsageMeter();
+      void meter
+        .record({
+          tenantId,
+          userId,
+          action: "query",
+          tokensUsed: llmTokens ?? 0,
+          costUsd: estimateCostUsd(llmTokens ?? 0),
+          latencyMs: Date.now() - start,
+          metadata: {
+            sessionId,
+            retrieved: retrievedCount,
+            reranked: rerankedCount,
+            coverage: citationCoverage,
+          },
+        })
+        .catch((err) => {
+          logger.error({ err, tenantId, userId }, "metering.record failed for query");
+        });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const retrievedCount: number = (finalState as any).retrievedChunks?.length
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ?? (finalState as any).sources?.length
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ?? 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rerankedCount: number = (finalState as any).rerankedChunks?.length ?? 0;
-
-    const response: QueryResponse = {
-      answer,
-      sources,
-      sessionId,
-      queryLogId: finalState.queryLogId,
-      metrics: {
-        retrieved: retrievedCount,
-        reranked: rerankedCount,
-        latencyMs: Date.now() - start,
-      },
-    };
-
-    try {
-      const obs = await getObservability();
-      obs.incrCounter("queriesTotal");
-      obs.recordLatency("query", Date.now() - start);
-      obs.recordObservation("citationCoverage", citationCoverage);
-    } catch {
-      // metrics are best-effort
-    }
-    return response;
-  });
+      return response;
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
 // SSE streaming
-//
-// Phase 3: surfaces rich per-stage events so the UI can show progress.
-// Events emitted:
-//   - start        { sessionId, requestId }
-//   - understood   { intent, entities }
-//   - retrieved    { chunkCount, sources[] }
-//   - context      { contextChars, sourceCount }
-//   - token        { text }                       (one per LLM token)
-//   - generated    { answer, sources, groundednessScore }
-//   - evaluated    { groundedness, faithfulness, relevance, overall, needsReRetrieval }
-//   - end          { sessionId, tokenCount, latencyMs, citationCoverage }
-//   - error        { code, message }
 // ---------------------------------------------------------------------------
 async function streamQuery(
   request: FastifyRequest,
@@ -132,6 +183,7 @@ async function streamQuery(
   sessionId: string,
   graph: Awaited<ReturnType<typeof getQueryGraph>>,
   start: number,
+  ctx: { tenantId: string | null; userId: string | null },
 ): Promise<FastifyReply> {
   reply.hijack();
   const raw = reply as unknown as RawReply;
@@ -152,12 +204,6 @@ async function streamQuery(
   try {
     send("start", { sessionId, requestId: request.id });
 
-    // ---- Stream LLM tokens ---------------------------------------------
-    // We use the standard `messages` stream mode. Per-stage events are
-    // derived from the messages themselves in a future enhancement; for
-    // Phase 3 we emit `start` and `end` and let the tokens flow.
-    // Some LangGraph versions return the stream as a Promise<AsyncIterable>
-    // and others return the AsyncIterable directly — normalise with await.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const streamOrPromise: any = (graph as any).stream(
       {
@@ -165,6 +211,9 @@ async function streamQuery(
         sessionId,
         filters: body.filters,
         topK: body.topK,
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        user: request.user,
       },
       {
         streamMode: "messages",
@@ -184,7 +233,6 @@ async function streamQuery(
       }
     }
 
-    // ---- Pull final state for metadata events ------------------------
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const finalState: any = await (graph as any).getState({
       configurable: { thread_id: sessionId },
@@ -215,7 +263,6 @@ async function streamQuery(
       });
     }
 
-    // ---- Citation coverage ---------------------------------------------
     const citationResult = extractCitations(finalAnswer, sources as never);
     const citationCoverage = sources.length === 0
       ? 0
@@ -237,6 +284,25 @@ async function streamQuery(
     } catch {
       // best-effort
     }
+
+    // ---- Usage metering (stream) --------------------------------------
+    const meter = getUsageMeter();
+    void meter
+      .record({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        action: "query.stream",
+        tokensUsed: tokenCount,
+        costUsd: estimateCostUsd(tokenCount),
+        latencyMs: Date.now() - start,
+        metadata: { sessionId, streamed: true },
+      })
+      .catch((err) => {
+        logger.error(
+          { err, tenantId: ctx.tenantId, userId: ctx.userId },
+          "metering.record failed for streamed query",
+        );
+      });
   } catch (err) {
     request.log.error({ err }, "Streaming query failed");
     send("error", {
@@ -250,6 +316,16 @@ async function streamQuery(
   return reply;
 }
 
+// ---------------------------------------------------------------------------
+// Cost estimation (rough — final cost should come from the LLM provider's
+// usage callback. Until then we charge $0.000002 / token as a placeholder.)
+// ---------------------------------------------------------------------------
+const USD_PER_TOKEN = 0.000002;
+function estimateCostUsd(tokens: number): number {
+  if (!Number.isFinite(tokens) || tokens <= 0) return 0;
+  return Math.round(tokens * USD_PER_TOKEN * 1_000_000) / 1_000_000;
+}
+
 function preview(text: string | undefined, max: number): string {
   if (!text) return "";
   return text.length > max ? text.slice(0, max) + "…" : text;
@@ -257,16 +333,13 @@ function preview(text: string | undefined, max: number): string {
 
 function extractTokenText(chunk: unknown): string | null {
   if (!chunk) return null;
-  // Tuple form: [BaseMessage, metadata]
   if (Array.isArray(chunk) && chunk.length >= 1) {
     return extractTokenText(chunk[0]);
   }
-  // BaseMessage shape
   if (typeof chunk === "object" && chunk !== null) {
     const m = chunk as { content?: unknown };
     if (typeof m.content === "string") return m.content;
     if (Array.isArray(m.content)) {
-      // Anthropic/OpenAI multimodal: pull out text parts.
       const text = m.content
         .map((p: unknown) => {
           if (typeof p === "string") return p;

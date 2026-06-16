@@ -5,12 +5,27 @@
  * helpers `sourcesFromChunks` derive a `Source[]` from raw chunks so the
  * rest of the graph (buildContext, evaluate, response) doesn't have to
  * do it again.
+ *
+ * Phase 5 — multi-tenant + ACL:
+ *   - `tenantId` is pushed into the Qdrant payload filter at the
+ *     vector-search level so the database itself enforces isolation.
+ *   - After retrieval, `filterChunksForUser` is applied to enforce
+ *     per-document ACLs for non-admin users.
  */
 import { logger } from "../../../shared/logger.js";
 import { RetrievalError } from "../../../shared/errors.js";
-import type { Chunk, Source } from "../../../shared/types.js";
+import type { Chunk, QueryUnderstanding, Source } from "../../../shared/types.js";
 import { retrievalConfig } from "../../../config/index.js";
 import { getRetriever } from "../../../retrieval/factory.js";
+import { getVectorStore } from "../../../database/qdrant.js";
+import { getEmbeddingProvider } from "../../../embeddings/factory.js";
+import { VectorRetriever } from "../../../retrieval/vector.js";
+import {
+  filterChunksForUser,
+  getAllowedDocumentIds,
+} from "../../../security/documentPerms.js";
+import { hasRole } from "../../../security/rbac.js";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { QueryState } from "../state.js";
 
 /**
@@ -43,23 +58,64 @@ export async function retrieveNode(
       throw new RetrievalError(`[${nodeName}] state.query is empty`);
     }
 
+    // ---- Phase 5: identity from state -----------------------------------
+    const tenantId: string | null =
+      (state.tenantId as string | undefined) ??
+      (state.user?.tenantId as string | undefined) ??
+      null;
+    const userId: string | null =
+      (state.userId as string | undefined) ??
+      (state.user?.userId as string | undefined) ??
+      (state.user?.sub as string | undefined) ??
+      null;
+
+    // Build a UserPayload-shaped object so the ACL helpers can read roles.
+    const authUser = state.user ?? (userId ? { sub: userId, userId, roles: ["viewer"] } : null);
+
     logger.info(
-      { query: state.query, intent: state.understanding.intent },
+      {
+        query: state.query,
+        intent: state.understanding.intent,
+        tenantId,
+        userId,
+      },
       `[${nodeName}] start`,
     );
 
+    // ---- Phase 5: tenant-scoped vector search --------------------------
+    // For tenant-scoped queries we call the vector store directly with a
+    // Qdrant filter so the DB itself never returns cross-tenant chunks.
+    // For unscoped queries (no tenantId on a non-admin user) we still
+    // call the shared retriever for the convenience of hybrid mode.
     const retriever = getRetriever();
     const topK = retrievalConfig.topK;
-    const chunks = await retriever.retrieve(
+
+    let chunks: Chunk[] = await runTenantScopedOrRetriever(
+      retriever.name,
       state.query,
-      state.understanding,
-      { topK },
+      state.understanding as QueryUnderstanding,
+      topK,
+      tenantId,
     );
+
+    // ---- Phase 5: per-document ACL (in addition to tenant filter) ------
+    if (authUser && !hasRole(authUser, "admin")) {
+      chunks = await filterChunksForUser(authUser, chunks);
+    } else if (!authUser) {
+      // Anonymous: deny by default.
+      chunks = [];
+    }
 
     const sources = sourcesFromChunks(chunks);
 
     logger.info(
-      { topK, retrieved: chunks.length, sources: sources.length },
+      {
+        topK,
+        retrieved: chunks.length,
+        sources: sources.length,
+        tenantId,
+        userId,
+      },
       `[${nodeName}] done`,
     );
 
@@ -71,6 +127,13 @@ export async function retrieveNode(
         retrievedCount: chunks.length,
         retriever: retriever.name,
         node: nodeName,
+        tenantId,
+        userId,
+        // Hint for downstream evaluators: was the user authorized to see
+        // any of the candidate docs at all?
+        allowedDocumentIdCount: authUser
+          ? (await getAllowedDocumentIds(authUser))?.length ?? 0
+          : 0,
       },
     };
   } catch (err) {
@@ -82,3 +145,58 @@ export async function retrieveNode(
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a tenant-scoped Qdrant search when a `tenantId` is available,
+ * otherwise delegate to the shared `Retriever` (which handles hybrid /
+ * keyword modes).
+ *
+ * Tenant isolation is enforced by the Qdrant filter
+ * `metadata.tenantId == <tenantId>` — chunks without a `tenantId`
+ * payload field are excluded for tenant-scoped queries.
+ */
+async function runTenantScopedOrRetriever(
+  retrieverName: string,
+  query: string,
+  understanding: QueryUnderstanding,
+  topK: number,
+  tenantId: string | null,
+): Promise<Chunk[]> {
+  // Only do a direct store call when we're confident the active retriever
+  // is a plain `VectorRetriever`. For hybrid / keyword configurations we
+  // delegate to the factory so the result is still a single ranked list.
+  if (!tenantId || retrieverName !== "vector") {
+    const retriever = getRetriever();
+    return retriever.retrieve(query, understanding, { topK });
+  }
+
+  try {
+    const embeddings = getEmbeddingProvider();
+    const vector = await embeddings.embed(query);
+    const store = getVectorStore();
+    const tenantFilter = {
+      must: [{ key: "metadata.tenantId", match: { value: tenantId } }],
+    };
+    const hits = await store.search(vector, topK, tenantFilter);
+    return hits.map((h) => h.chunk);
+  } catch (cause) {
+    // If the direct path fails, fall back to the shared retriever so the
+    // user-visible failure mode stays identical to the pre-Phase-5
+    // behaviour (RetrievalError from `vector.retrieve`).
+    logger.warn(
+      { err: cause, tenantId },
+      `[retrieve] tenant-scoped search failed; falling back to shared retriever`,
+    );
+    const retriever = getRetriever();
+    return retriever.retrieve(query, understanding, { topK });
+  }
+}
+
+// Reference VectorRetriever to avoid unused-import warnings if the
+// function above is ever inlined. The class is used elsewhere via
+// `getRetriever()` so this is just a type anchor.
+void VectorRetriever;

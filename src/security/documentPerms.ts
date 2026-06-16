@@ -1,52 +1,127 @@
 /**
  * Per-document / per-chunk permission filtering.
  *
- * Phase 1: pass-through — no filtering is performed.
- * Phase 5: will apply tenant + ACL filtering based on:
- *   - chunk.metadata.tenantId
- *   - chunk.metadata.ownerId
- *   - chunk.metadata.visibility
- *   - chunk.metadata.allowedRoles
- *   - user.tenantId / user.roles
+ * Phase 5: applies the platform's tenant + ACL policy:
+ *   - Admins see every chunk.
+ *   - Other users only see chunks whose `documentId` is in their
+ *     `document_permissions` rows with `canRead = true`.
+ *   - If a user has no `document_permissions` rows, they see nothing
+ *     (deny by default — Phase 5 multi-tenant mode).
  *
- * The function signature is fixed so call sites don't have to change in
- * Phase 5 — only the implementation body will.
+ * The function is async because it may need to hit Postgres; we expose
+ * `filterChunksForUser` (awaitable) and a synchronous fallback
+ * `filterChunksForUserSync` for hot paths that already have a cached
+ * allowed-ids list.
  */
+import { PrismaClient } from "@prisma/client";
 import type { Chunk } from "../shared/types.js";
 import type { UserPayload } from "./auth.js";
+import { hasRole } from "./rbac.js";
+import { logger } from "../shared/logger.js";
+
+// ---------------------------------------------------------------------------
+// Prisma client (singleton, lazy)
+// ---------------------------------------------------------------------------
+
+let _prisma: PrismaClient | undefined;
+
+/** Lazy singleton Prisma client used by the permission layer. */
+export function getPrisma(): PrismaClient {
+  if (_prisma) return _prisma;
+  _prisma = new PrismaClient();
+  return _prisma;
+}
+
+/** Test helper: close + reset the singleton. */
+export async function resetPrisma(): Promise<void> {
+  if (_prisma) {
+    await _prisma.$disconnect();
+    _prisma = undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the list of `documentId`s the user is allowed to read.
+ * - Admins receive `null` (the sentinel meaning "no restriction").
+ * - Other users receive the union of their `canRead` permission rows.
+ *
+ * Returns `[]` (not `null`) for non-admins who have no permission rows.
+ */
+export async function getAllowedDocumentIds(
+  user: UserPayload | null | undefined,
+): Promise<string[] | null> {
+  if (!user) return [];
+  if (hasRole(user, "admin")) return null;
+
+  const userId = user.userId ?? user.sub;
+  if (!userId) return [];
+
+  try {
+    const prisma = getPrisma();
+    const rows = await prisma.documentPermission.findMany({
+      where: { userId, canRead: true },
+      select: { documentId: true },
+    });
+    return rows.map((r) => r.documentId);
+  } catch (cause) {
+    // Soft-fail: log and return an empty set. A misconfigured DB must not
+    // silently elevate privileges — least-privilege default is "deny".
+    logger.error(
+      { err: cause, userId },
+      "documentPerms: getAllowedDocumentIds failed; denying all",
+    );
+    return [];
+  }
+}
 
 /**
  * Filter a list of chunks down to those the user is permitted to see.
  *
- * @param user   the authenticated user (may be `null` for anonymous flows)
- * @param chunks the candidate chunks (e.g. from a retriever)
- * @returns      the subset the user is allowed to consume
+ * - Admin → returns the input unchanged.
+ * - Non-admin with no `documentId` rows in `document_permissions` → returns `[]`.
+ * - Non-admin otherwise → returns the subset whose `documentId` is in
+ *   `getAllowedDocumentIds(user)`.
  */
-export function filterChunksForUser(
-  user: UserPayload | null,
+export async function filterChunksForUser(
+  user: UserPayload | null | undefined,
   chunks: Chunk[],
+): Promise<Chunk[]> {
+  if (!user) return [];
+  if (hasRole(user, "admin")) return chunks;
+
+  const allowed = await getAllowedDocumentIds(user);
+  if (!allowed || allowed.length === 0) return [];
+
+  const allowedSet = new Set(allowed);
+  return chunks.filter((c) => allowedSet.has(c.documentId));
+}
+
+/**
+ * Synchronous variant for callers that have already resolved the allowed
+ * document-id list. Behaviour mirrors `filterChunksForUser` exactly.
+ */
+export function filterChunksForUserSync(
+  user: UserPayload | null | undefined,
+  chunks: Chunk[],
+  allowedDocumentIds: string[] | null,
 ): Chunk[] {
-  // Phase 1: no filtering. Return as-is.
-  // TODO(phase-5): implement tenant + ACL filtering.
-  //
-  // Sketch:
-  //   for each chunk:
-  //     if chunk.metadata.tenantId && chunk.metadata.tenantId !== user?.tenantId
-  //       → drop
-  //     if chunk.metadata.ownerId && chunk.metadata.ownerId !== user?.userId
-  //       → drop unless user is admin
-  //     if chunk.metadata.visibility === "private" && owner mismatch → drop
-  //     if chunk.metadata.allowedRoles && none of user.roles satisfy → drop
-  void user; // silence unused-param warning; used in Phase 5
-  return chunks;
+  if (!user) return [];
+  if (hasRole(user, "admin")) return chunks;
+  if (!allowedDocumentIds || allowedDocumentIds.length === 0) return [];
+  const allowedSet = new Set(allowedDocumentIds);
+  return chunks.filter((c) => allowedSet.has(c.documentId));
 }
 
 /**
  * Convenience: did the user (after filtering) end up with at least one chunk?
  */
-export function hasVisibleChunks(
+export async function hasVisibleChunks(
   user: UserPayload | null,
   chunks: Chunk[],
-): boolean {
-  return filterChunksForUser(user, chunks).length > 0;
+): Promise<boolean> {
+  return (await filterChunksForUser(user, chunks)).length > 0;
 }
