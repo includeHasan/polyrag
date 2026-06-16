@@ -56,7 +56,16 @@ const TenantConfigOverridesSchema = z.object({
 });
 
 export async function adminConfigRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/admin/tenants/:id/config", async (request) => {
+  app.get(
+    "/api/admin/tenants/:id/config",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "Get tenant config overrides",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     const { id } = request.params as { id: string };
 
@@ -92,7 +101,16 @@ export async function adminConfigRoutes(app: FastifyInstance): Promise<void> {
     return (tenantConfig?.config ?? {}) as TenantConfigOverrides;
   });
 
-  app.put("/api/admin/tenants/:id/config", async (request) => {
+  app.put(
+    "/api/admin/tenants/:id/config",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "Update tenant config overrides",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     requirePermission(request.user as unknown as UserPayload, "manage_tenant_config");
 

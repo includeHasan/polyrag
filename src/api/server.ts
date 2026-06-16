@@ -25,6 +25,7 @@ import { registerRequestLogger } from "./middleware/requestLogger.js";
 import { verifyAuth } from "./middleware/auth.js";
 import { tenantContextMiddleware } from "./middleware/tenantContext.js";
 import { registerRoutes } from "./routes/index.js";
+import { registerSwagger } from "./swagger.js";
 import { setQueryGraphModule, type CompiledQueryGraph } from "./deps.js";
 
 /** Optional dependencies a route might need. Stored on the instance. */
@@ -71,6 +72,13 @@ export async function createServer(): Promise<FastifyInstance> {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
   await app.register(fastifySensible);
+
+  // -------------------------------------------------------------------------
+  // OpenAPI / Swagger. MUST be registered before routes so its `onRoute`
+  // hook captures them. Serves the spec at /docs/json and the UI at /docs.
+  // -------------------------------------------------------------------------
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await registerSwagger(app as any);
 
   // -------------------------------------------------------------------------
   // Request-scoped hooks (id, start time, response log)

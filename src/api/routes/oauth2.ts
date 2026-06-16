@@ -110,7 +110,15 @@ function readStateCookie(request: FastifyRequest): string | undefined {
 
 export async function oauth2Routes(app: FastifyInstance): Promise<void> {
   // ---- /login ---------------------------------------------------------
-  app.get("/api/oauth2/:provider/login", async (request, reply) => {
+  app.get(
+    "/api/oauth2/:provider/login",
+    {
+      schema: {
+        tags: ["Auth"],
+        summary: "Begin OAuth2 login",
+      },
+    },
+    async (request, reply) => {
     const parsedProvider = parseProvider(request);
     if (!parsedProvider.ok) {
       return reply.code(400).send({
@@ -134,7 +142,15 @@ export async function oauth2Routes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- /callback ------------------------------------------------------
-  app.get("/api/oauth2/:provider/callback", async (request, reply) => {
+  app.get(
+    "/api/oauth2/:provider/callback",
+    {
+      schema: {
+        tags: ["Auth"],
+        summary: "OAuth2 callback",
+      },
+    },
+    async (request, reply) => {
     const parsedProvider = parseProvider(request);
     if (!parsedProvider.ok) {
       return reply.code(400).send({

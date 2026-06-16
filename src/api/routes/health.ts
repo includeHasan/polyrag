@@ -27,7 +27,17 @@ const HealthResponseSchema = z.object({
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/healthz", async () => {
+  app.get(
+    "/healthz",
+    {
+      schema: {
+        tags: ["Health"],
+        summary: "Liveness & readiness probe",
+        description:
+          "Public liveness/readiness probe. Returns the build version, current uptime in seconds, and a hard-coded \"ok\" status. No authentication required.",
+      },
+    },
+    async () => {
     const body: HealthResponse = {
       status: "ok",
       version: VERSION,

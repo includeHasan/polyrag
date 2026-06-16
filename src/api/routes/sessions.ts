@@ -46,7 +46,16 @@ function preview(text: string | undefined, max = 100): string {
 }
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/sessions/:id/history", async (request, reply) => {
+  app.get(
+    "/api/sessions/:id/history",
+    {
+      schema: {
+        tags: ["Sessions"],
+        summary: "Get session conversation history",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.code(400).send({ error: params.error.flatten() });
@@ -111,7 +120,16 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
    *   - Returns the latest state snapshot for a given session.
    *   - Useful as a "give me what the conversation looks like now" endpoint.
    */
-  app.get("/api/sessions/:id/state", async (request, reply) => {
+  app.get(
+    "/api/sessions/:id/state",
+    {
+      schema: {
+        tags: ["Sessions"],
+        summary: "Get session graph state",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.code(400).send({ error: params.error.flatten() });

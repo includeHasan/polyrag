@@ -58,7 +58,18 @@ function chunksToSources(chunks: Chunk[]): Source[] {
 }
 
 export async function searchRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/search", async (request) => {
+  app.post(
+    "/api/search",
+    {
+      schema: {
+        tags: ["Query"],
+        summary: "Raw retrieval (no generation)",
+        description:
+          "Pure retrieval with no generation. Useful for previews and for tools that want the raw context without paying the LLM cost. Requires authentication.",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     const start = Date.now();
     const parsed = SearchRequestSchema.safeParse(request.body);
     if (!parsed.success) throw parsed.error;

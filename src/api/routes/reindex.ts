@@ -66,7 +66,13 @@ export async function reindexRoutes(app: FastifyInstance): Promise<void> {
   // ---------------------------------------------------------------------
   // POST /api/reindex — start a reindex, pause for approval.
   // ---------------------------------------------------------------------
-  app.post("/api/reindex", async (request, reply) => {
+  app.post("/api/reindex", {
+    schema: {
+      tags: ["Ingestion"],
+      summary: "Re-index a document",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
     const parsed = ReindexRequestSchema.safeParse(request.body);
     if (!parsed.success) throw parsed.error;
 
@@ -107,7 +113,13 @@ export async function reindexRoutes(app: FastifyInstance): Promise<void> {
   // ---------------------------------------------------------------------
   // POST /api/reindex/resume — caller has decided. Approve or reject.
   // ---------------------------------------------------------------------
-  app.post("/api/reindex/resume", async (request: FastifyRequest) => {
+  app.post("/api/reindex/resume", {
+    schema: {
+      tags: ["Ingestion"],
+      summary: "Resume a paused re-index (HITL)",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request: FastifyRequest) => {
     const parsed = ResumeRequestSchema.safeParse(request.body);
     if (!parsed.success) throw parsed.error;
 

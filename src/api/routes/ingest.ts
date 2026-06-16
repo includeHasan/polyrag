@@ -24,7 +24,15 @@ interface InlineIngestResponse {
 }
 
 export async function ingestRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/ingest", async (request, reply) => {
+  app.post("/api/ingest", {
+    schema: {
+      tags: ["Ingestion"],
+      summary: "Ingest a document",
+      description:
+        "Synchronously runs the ingestion pipeline (connector → chunk → embed → index). Tenant-scoped; requires the `ingest` permission.",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request, reply) => {
     const start = Date.now();
     // Phase 1 stub: any authenticated user can ingest. Phase 3 will
     // gate on `request.user.roles` (e.g. "ingest:write").

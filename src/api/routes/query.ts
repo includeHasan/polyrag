@@ -44,6 +44,13 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
     "/api/query",
     {
       preHandler: rateLimitPreHandler({ action: "query" }),
+      schema: {
+        tags: ["Query"],
+        summary: "Run a RAG query",
+        description:
+          "Run a retrieval-augmented generation query. Supports Server-Sent Events (SSE) streaming when `stream=true`. Tenant-scoped: requires authentication and applies multi-tenant filters based on the caller's tenant.",
+        security: [{ bearerAuth: [] }],
+      },
     },
     async (request, reply) => {
       const start = Date.now();

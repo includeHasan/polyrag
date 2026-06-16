@@ -29,7 +29,16 @@ export interface BillingUsageResponse {
 }
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/billing/quota", async (request): Promise<BillingQuotaResponse> => {
+  app.get(
+    "/api/billing/quota",
+    {
+      schema: {
+        tags: ["Billing"],
+        summary: "Current usage vs monthly quota",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request): Promise<BillingQuotaResponse> => {
     const user = requireUser(request);
     const tenantId =
       (user.tenantId as string | undefined) ??
@@ -54,7 +63,16 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     return { used, cap: monthlyTokenCap, remaining };
   });
 
-  app.get("/api/billing/usage", async (request): Promise<BillingUsageResponse> => {
+  app.get(
+    "/api/billing/usage",
+    {
+      schema: {
+        tags: ["Billing"],
+        summary: "Usage breakdown for the tenant",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request): Promise<BillingUsageResponse> => {
     const user = requireUser(request);
     const tenantId =
       (user.tenantId as string | undefined) ??

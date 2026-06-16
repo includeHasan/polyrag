@@ -3,10 +3,16 @@ import { setTenantContext } from "@/platform/tenancy/context.js";
 import { tenantConfigService } from "@/platform/tenancy/configService.js";
 import { logger } from "@/core/shared/logger.js";
 
+/** Public paths that must not trigger tenant-config resolution (no DB hit). */
+const PUBLIC_PREFIXES = ["/docs", "/healthz", "/metrics", "/api/oauth2"];
+
 export async function tenantContextMiddleware(
   request: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
+  if (PUBLIC_PREFIXES.some((p) => request.url.startsWith(p))) {
+    return;
+  }
   if (!request.user) {
     return;
   }

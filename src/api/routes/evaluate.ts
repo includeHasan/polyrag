@@ -21,7 +21,13 @@ const EvaluationRequestSchema = z.object({
 type EvaluationRequest = z.infer<typeof EvaluationRequestSchema>;
 
 export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/evaluate", async (request) => {
+  app.post("/api/evaluate", {
+    schema: {
+      tags: ["Feedback & Eval"],
+      summary: "Run the evaluation harness over a dataset",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request) => {
     const start = Date.now();
     const parsed = EvaluationRequestSchema.safeParse(request.body);
     if (!parsed.success) throw parsed.error;

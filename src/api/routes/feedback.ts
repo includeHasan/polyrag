@@ -9,7 +9,13 @@ import { getObservability } from "../deps.js";
 import { logger } from "@/core/shared/logger.js";
 
 export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/feedback", async (request) => {
+  app.post("/api/feedback", {
+    schema: {
+      tags: ["Feedback & Eval"],
+      summary: "Submit feedback on a query",
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request) => {
     const parsed = FeedbackSchema.safeParse(request.body);
     if (!parsed.success) throw parsed.error;
     const feedback = parsed.data;

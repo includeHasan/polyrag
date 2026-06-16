@@ -30,7 +30,17 @@ const AssignAdminSchema = z.object({
 });
 
 export async function adminTenantRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/api/admin/tenants", async (request) => {
+  app.post(
+    "/api/admin/tenants",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "Create a tenant",
+        description: "Platform-admin only (super_admin).",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     requirePermission(request.user as unknown as UserPayload, "manage_tenants");
 
@@ -48,7 +58,16 @@ export async function adminTenantRoutes(app: FastifyInstance): Promise<void> {
     return tenant;
   });
 
-  app.get("/api/admin/tenants", async (request) => {
+  app.get(
+    "/api/admin/tenants",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "List tenants",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     requirePermission(request.user as unknown as UserPayload, "manage_tenants");
 
@@ -61,7 +80,16 @@ export async function adminTenantRoutes(app: FastifyInstance): Promise<void> {
     return tenants;
   });
 
-  app.get("/api/admin/tenants/:id", async (request) => {
+  app.get(
+    "/api/admin/tenants/:id",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "Get a tenant + its config",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     requirePermission(request.user as unknown as UserPayload, "manage_tenants");
 
@@ -93,7 +121,16 @@ export async function adminTenantRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.patch("/api/admin/tenants/:id", async (request) => {
+  app.patch(
+    "/api/admin/tenants/:id",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "Update tenant name/status",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     requirePermission(request.user as unknown as UserPayload, "manage_tenants");
 
@@ -116,7 +153,16 @@ export async function adminTenantRoutes(app: FastifyInstance): Promise<void> {
     return tenant;
   });
 
-  app.post("/api/admin/tenants/:id/admins", async (request) => {
+  app.post(
+    "/api/admin/tenants/:id/admins",
+    {
+      schema: {
+        tags: ["Admin"],
+        summary: "Assign a user to a tenant",
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request) => {
     if (!request.user) throw new AuthorizationError("Authentication required");
     requirePermission(request.user as unknown as UserPayload, "manage_tenants");
 
