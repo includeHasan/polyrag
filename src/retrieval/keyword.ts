@@ -27,7 +27,8 @@ export class KeywordRetriever extends BaseRetriever {
     try {
       const index = getBM25Index();
       const topK = options?.topK ?? 10;
-      const hits = index.search(query, topK);
+      const tenantId = (options?.filter?.tenantId as string | undefined) ?? null;
+      const hits = index.search(query, topK, tenantId);
       logger.debug(
         {
           retriever: this.name,

@@ -13,6 +13,8 @@ import { evaluateRoutes } from "./evaluate.js";
 import { sessionRoutes } from "./sessions.js";
 import { billingRoutes } from "./billing.js";
 import { oauth2Routes } from "./oauth2.js";
+import { adminTenantRoutes } from "./admin/tenants.js";
+import { adminConfigRoutes } from "./admin/config.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await Promise.all([
@@ -28,6 +30,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     billingRoutes(app),
     oauth2Routes(app),
   ]);
+  await app.register(adminTenantRoutes);
+  await app.register(adminConfigRoutes);
 }
 
 export {
@@ -42,4 +46,6 @@ export {
   sessionRoutes,
   billingRoutes,
   oauth2Routes,
+  adminTenantRoutes,
+  adminConfigRoutes,
 };

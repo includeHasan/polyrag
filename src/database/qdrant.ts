@@ -26,6 +26,7 @@ import { logger } from "../shared/logger.js";
 import { RagError } from "../shared/errors.js";
 import type { Chunk } from "../shared/types.js";
 import type { VectorSearchHit, VectorStore } from "../shared/interfaces.js";
+import { assertTenantFilter } from "@/tenancy/guard.js";
 
 /** Shape we write into Qdrant payload. */
 interface ChunkPayload {
@@ -35,6 +36,9 @@ interface ChunkPayload {
   page?: number;
   text: string;
   metadata: Record<string, unknown>;
+  tenantId?: string;
+  embeddingModel?: string;
+  embeddingDim?: number;
 }
 
 let sharedClient: QdrantClient | undefined;
@@ -125,6 +129,8 @@ export class QdrantVectorStore implements VectorStore {
     k: number,
     filter?: Record<string, unknown>,
   ): Promise<VectorSearchHit[]> {
+    const tenantId = (filter as any)?.must?.[0]?.match?.value ?? null;
+    assertTenantFilter(tenantId);
     try {
       const res = await this.client.search(this.name, {
         vector,
@@ -179,6 +185,9 @@ export class QdrantVectorStore implements VectorStore {
       page: chunk.page,
       text: chunk.text,
       metadata: (chunk.metadata ?? {}) as Record<string, unknown>,
+      tenantId: chunk.metadata.tenantId as string | undefined,
+      embeddingModel: chunk.metadata.embeddingModel as string | undefined,
+      embeddingDim: chunk.metadata.embeddingModel ? chunk.embedding?.length : undefined,
     };
     return {
       id: chunk.chunkId,

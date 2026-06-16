@@ -19,15 +19,10 @@ import { GenerationError } from "../../../shared/errors.js";
 import { env } from "../../../config/env.js";
 import { LLMJudge } from "../../../evaluation/llmJudge.js";
 import type { Source } from "../../../shared/types.js";
+import { resolveNodeConfig } from "./_config.js";
+import { getLLM } from "@/llm/factory.js";
 
 const EVAL_THRESHOLD = 3; // 1-5 Likert; 3 = acceptable
-
-let judgeSingleton: LLMJudge | undefined;
-function getJudge(): LLMJudge {
-  if (judgeSingleton) return judgeSingleton;
-  judgeSingleton = new LLMJudge({ model: env.OPENAI_MODEL_EVALUATION });
-  return judgeSingleton;
-}
 
 export async function evaluateNode(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +31,8 @@ export async function evaluateNode(
 ): Promise<Record<string, any>> {
   const nodeName = "evaluate";
   const start = Date.now();
+
+  const cfg = resolveNodeConfig(state);
 
   // Feature toggle — keep CI fast.
   if (env.NODE_ENV === "test" && process.env.EVALUATION_ENABLED === "false") {
@@ -59,7 +56,7 @@ export async function evaluateNode(
   const sources: Source[] = (state.sources as Source[] | undefined) ?? [];
 
   try {
-    const judge = getJudge();
+    const judge = new LLMJudge({ model: cfg.models.evaluationModel });
     const result = await judge.score({
       query: state.query ?? "",
       answer,

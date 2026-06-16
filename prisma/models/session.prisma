@@ -7,6 +7,7 @@
 model Session {
   id        String   @id @default(uuid())
   userId    String?
+  tenantId  String?
   title     String?
   isActive  Boolean  @default(true)
   metadata  Json     @default("{}")
@@ -15,6 +16,7 @@ model Session {
   expiresAt DateTime? @db.Timestamptz
 
   @@index([userId])
+  @@index([tenantId])
   @@index([isActive])
   @@map("sessions")
 }
@@ -22,11 +24,13 @@ model Session {
 model UserPreference {
   id        String   @id @default(uuid())
   userId    String
+  tenantId  String?
   key       String
   value     Json
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([userId, key])
   @@index([userId])
+  @@index([tenantId])
   @@map("user_preferences")
 }

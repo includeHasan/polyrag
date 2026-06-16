@@ -15,8 +15,9 @@
 import { logger } from "../../../shared/logger.js";
 import { RetrievalError } from "../../../shared/errors.js";
 import type { Chunk, QueryUnderstanding, Source } from "../../../shared/types.js";
-import { retrievalConfig } from "../../../config/index.js";
-import { getRetriever } from "../../../retrieval/factory.js";
+import { getRetriever } from "@/retrieval/factory.js";
+import { resolveNodeConfig } from "./_config.js";
+import type { ResolvedTenantConfig } from "@/tenancy/resolve.js";
 import { getVectorStore } from "../../../database/qdrant.js";
 import { getEmbeddingProvider } from "../../../embeddings/factory.js";
 import { VectorRetriever } from "../../../retrieval/vector.js";
@@ -82,13 +83,15 @@ export async function retrieveNode(
       `[${nodeName}] start`,
     );
 
+    const cfg = resolveNodeConfig(state);
+
     // ---- Phase 5: tenant-scoped vector search --------------------------
     // For tenant-scoped queries we call the vector store directly with a
     // Qdrant filter so the DB itself never returns cross-tenant chunks.
     // For unscoped queries (no tenantId on a non-admin user) we still
     // call the shared retriever for the convenience of hybrid mode.
-    const retriever = getRetriever();
-    const topK = retrievalConfig.topK;
+    const retriever = getRetriever(cfg.retrieval);
+    const topK = cfg.retrieval.topK;
 
     let chunks: Chunk[] = await runTenantScopedOrRetriever(
       retriever.name,
@@ -96,6 +99,7 @@ export async function retrieveNode(
       state.understanding as QueryUnderstanding,
       topK,
       tenantId,
+      cfg.retrieval,
     );
 
     // ---- Phase 5: per-document ACL (in addition to tenant filter) ------
@@ -165,35 +169,35 @@ async function runTenantScopedOrRetriever(
   understanding: QueryUnderstanding,
   topK: number,
   tenantId: string | null,
+  retrieval: ResolvedTenantConfig["retrieval"],
 ): Promise<Chunk[]> {
-  // Only do a direct store call when we're confident the active retriever
-  // is a plain `VectorRetriever`. For hybrid / keyword configurations we
-  // delegate to the factory so the result is still a single ranked list.
-  if (!tenantId || retrieverName !== "vector") {
-    const retriever = getRetriever();
-    return retriever.retrieve(query, understanding, { topK });
+  const tenantFilter = tenantId ? { "metadata.tenantId": tenantId } : undefined;
+
+  // Direct Qdrant path is an optimisation for the plain vector retriever;
+  // it lets the DB-level filter reject cross-tenant rows before scoring.
+  if (tenantId && retrieverName === "vector") {
+    try {
+      const embeddings = getEmbeddingProvider();
+      const vector = await embeddings.embed(query);
+      const store = getVectorStore();
+      const qdrantFilter = {
+        must: [{ key: "metadata.tenantId", match: { value: tenantId } }],
+      };
+      const hits = await store.search(vector, topK, qdrantFilter);
+      return hits.map((h) => h.chunk);
+    } catch (cause) {
+      logger.warn(
+        { err: cause, tenantId },
+        `[retrieve] tenant-scoped search failed; falling back to shared retriever`,
+      );
+    }
   }
 
-  try {
-    const embeddings = getEmbeddingProvider();
-    const vector = await embeddings.embed(query);
-    const store = getVectorStore();
-    const tenantFilter = {
-      must: [{ key: "metadata.tenantId", match: { value: tenantId } }],
-    };
-    const hits = await store.search(vector, topK, tenantFilter);
-    return hits.map((h) => h.chunk);
-  } catch (cause) {
-    // If the direct path fails, fall back to the shared retriever so the
-    // user-visible failure mode stays identical to the pre-Phase-5
-    // behaviour (RetrievalError from `vector.retrieve`).
-    logger.warn(
-      { err: cause, tenantId },
-      `[retrieve] tenant-scoped search failed; falling back to shared retriever`,
-    );
-    const retriever = getRetriever();
-    return retriever.retrieve(query, understanding, { topK });
-  }
+  const retriever = getRetriever(retrieval);
+  return retriever.retrieve(query, understanding, {
+    topK,
+    filter: tenantFilter,
+  });
 }
 
 // Reference VectorRetriever to avoid unused-import warnings if the

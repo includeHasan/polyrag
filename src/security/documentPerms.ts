@@ -63,7 +63,7 @@ export async function getAllowedDocumentIds(
   try {
     const prisma = getPrisma();
     const rows = await prisma.documentPermission.findMany({
-      where: { userId, canRead: true },
+      where: { userId, canRead: true, ...(user.tenantId ? { tenantId: user.tenantId } : {}) },
       select: { documentId: true },
     });
     return rows.map((r) => r.documentId);
@@ -97,7 +97,13 @@ export async function filterChunksForUser(
   if (!allowed || allowed.length === 0) return [];
 
   const allowedSet = new Set(allowed);
-  return chunks.filter((c) => allowedSet.has(c.documentId));
+  let filtered = chunks.filter((c) => allowedSet.has(c.documentId));
+  if (user.tenantId) {
+    filtered = filtered.filter(
+      (c) => !c.metadata?.tenantId || c.metadata.tenantId === user.tenantId,
+    );
+  }
+  return filtered;
 }
 
 /**
@@ -113,7 +119,13 @@ export function filterChunksForUserSync(
   if (hasRole(user, "admin")) return chunks;
   if (!allowedDocumentIds || allowedDocumentIds.length === 0) return [];
   const allowedSet = new Set(allowedDocumentIds);
-  return chunks.filter((c) => allowedSet.has(c.documentId));
+  let filtered = chunks.filter((c) => allowedSet.has(c.documentId));
+  if (user.tenantId) {
+    filtered = filtered.filter(
+      (c) => !c.metadata?.tenantId || c.metadata.tenantId === user.tenantId,
+    );
+  }
+  return filtered;
 }
 
 /**

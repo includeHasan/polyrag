@@ -20,6 +20,7 @@ import { v4 as uuidv4 } from "uuid";
 // The vector store factory lives in `src/database/qdrant.ts`. It is provided
 // by the storage layer (task #4) and exposed via the path alias.
 import { getVectorStore } from "@/database/qdrant.js";
+import { env } from "@/config/env.js";
 import { chunkingConfig } from "../config/index.js";
 import { getChunker } from "../chunking/factory.js";
 import { getEmbeddingProvider } from "../embeddings/factory.js";
@@ -88,6 +89,7 @@ export async function runIngestion(request: IngestRequest): Promise<IngestionRes
   //    cleanest way to pass hint data through the `Chunker.split(doc)` seam.
   doc.metadata = {
     ...(doc.metadata ?? {}),
+    tenantId: request.tenantId ?? "default",
     metadataHint: {
       author: undefined,
       date: undefined,
@@ -135,6 +137,8 @@ export async function runIngestion(request: IngestRequest): Promise<IngestionRes
       ...baseMetadata,
       ...(c.metadata ?? {}),
       tags: [...(c.metadata?.tags ?? baseMetadata.tags ?? [])],
+      tenantId: request.tenantId ?? "default",
+      embeddingModel: env.OPENAI_EMBEDDING_MODEL,
     };
   }
   log.info(

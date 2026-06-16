@@ -12,6 +12,9 @@ import { randomUUID } from "node:crypto";
 import { IngestRequestSchema } from "@/shared/types.js";
 import { getIngestion, getObservability } from "../deps.js";
 import { AuthorizationError, IngestionError } from "@/shared/errors.js";
+import { requirePermission } from "@/security/rbac.js";
+import type { UserPayload } from "@/security/auth.js";
+import { tenantConfigService } from "@/tenancy/configService.js";
 
 interface InlineIngestResponse {
   jobId: "inline";
@@ -29,11 +32,21 @@ export async function ingestRoutes(app: FastifyInstance): Promise<void> {
       throw new AuthorizationError("Authentication required to ingest");
     }
 
+    // Require ingest permission
+    requirePermission(request.user as unknown as UserPayload, "ingest")
+
+    // Extract tenant context
+    const tenantId = (request.user.tenantId as string | undefined) ??
+      (request.user.tenant_id as string | undefined) ??
+      "default"
+    const userId = (request.user.userId as string | undefined) ??
+      (request.user.sub as string | undefined) ?? null
+
     const parsed = IngestRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       throw parsed.error;
     }
-    const ingestRequest = parsed.data;
+    const ingestRequest = { ...parsed.data, tenantId };
 
     const ingestion = await getIngestion();
     let result;

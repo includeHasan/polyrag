@@ -6,8 +6,8 @@
  */
 import { logger } from "../../../shared/logger.js";
 import { RetrievalError } from "../../../shared/errors.js";
-import { retrievalConfig } from "../../../config/index.js";
-import { getReranker } from "../../../reranking/factory.js";
+import { getReranker } from "@/reranking/factory.js";
+import { resolveNodeConfig } from "./_config.js";
 import type { QueryState } from "../state.js";
 
 export async function rerankNode(
@@ -17,6 +17,7 @@ export async function rerankNode(
 ): Promise<Record<string, any>> {
   const nodeName = "rerank";
   try {
+    const cfg = resolveNodeConfig(state);
     const chunks: any[] = state.retrievedChunks ?? [];
     if (chunks.length === 0) {
       logger.info(`[${nodeName}] no chunks to rerank — passthrough`);
@@ -25,7 +26,7 @@ export async function rerankNode(
         metadata: { ...state.metadata, rerankedCount: 0, node: nodeName },
       };
     }
-    if (!retrievalConfig.rerankerEnabled) {
+    if (!cfg.retrieval.rerankerEnabled) {
       logger.info(`[${nodeName}] reranker disabled — passthrough`);
       return {
         rerankedChunks: chunks,
@@ -39,15 +40,15 @@ export async function rerankNode(
     }
 
     logger.info(
-      { input: chunks.length, topN: retrievalConfig.rerankTopK },
+      { input: chunks.length, topN: cfg.retrieval.rerankTopK },
       `[${nodeName}] start`,
     );
 
-    const reranker = getReranker();
+    const reranker = getReranker(cfg.retrieval);
     const reranked = await reranker.rerank(
       state.query,
       chunks,
-      retrievalConfig.rerankTopK,
+      cfg.retrieval.rerankTopK,
     );
 
     logger.info(

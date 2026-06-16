@@ -8,6 +8,7 @@ model QueryLog {
   id          String   @id @default(uuid()) @db.Uuid
   sessionId   String?  @db.Uuid
   userId      String?  @db.Uuid
+  tenantId    String?  @db.Uuid
   query       String
   answer      String?
   intent      String?
@@ -30,6 +31,7 @@ model QueryLog {
 
   @@index([sessionId])
   @@index([userId])
+  @@index([tenantId])
   @@index([createdAt])
   @@map("query_logs")
 }
@@ -38,6 +40,7 @@ model Feedback {
   id          String   @id @default(uuid()) @db.Uuid
   queryLogId  String   @db.Uuid
   userId      String?  @db.Uuid
+  tenantId    String?  @db.Uuid
   rating      Int      // 1-5
   thumbsUp    Boolean?
   comment     String?
@@ -48,6 +51,7 @@ model Feedback {
 
   @@index([queryLogId])
   @@index([userId])
+  @@index([tenantId])
   @@index([createdAt])
   @@map("feedback")
 }

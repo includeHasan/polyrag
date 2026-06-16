@@ -10,6 +10,7 @@
  * substitution itself.
  */
 import { logger } from "../shared/logger.js";
+import type { ResolvedTenantConfig } from "@/tenancy/resolve.js";
 import { CITATION_PROMPT } from "./citation.js";
 import { CITATION_VALIDITY_PROMPT, FAITHFULNESS_PROMPT, RELEVANCE_PROMPT } from "./evaluation.js";
 import { RETRIEVAL_PROMPT } from "./retrieval.js";
@@ -45,9 +46,26 @@ register("evaluation.faithfulness", FAITHFULNESS_PROMPT);
 register("evaluation.relevance", RELEVANCE_PROMPT);
 register("evaluation.citation_validity", CITATION_VALIDITY_PROMPT);
 
-export { getPrompt, registerPrompt as registerPrompt, resetPrompts };
+export { getPrompt, registerPrompt as registerPrompt, resetPrompts, getPromptFor };
 
 // Local re-export with the requested name (`registerPrompt`).
 function registerPrompt(name: string, template: string): void {
   register(name, template);
+}
+
+/**
+ * Resolve a prompt template for a specific tenant.
+ * Returns the tenant's override if present (from tenantConfig.prompts[name]),
+ * else falls back to the globally registered default.
+ * Substitutes {{domain}} with tenantConfig.persona.domain.
+ */
+function getPromptFor(name: string, tenantConfig: ResolvedTenantConfig): string {
+  const override = tenantConfig.prompts[name];
+  let template = override ?? getPrompt(name);
+
+  if (tenantConfig.persona.domain) {
+    template = template.replace(/\{\{domain\}\}/g, tenantConfig.persona.domain);
+  }
+
+  return template;
 }

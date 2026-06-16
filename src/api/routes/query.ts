@@ -33,6 +33,7 @@ import { rateLimitPreHandler } from "../middleware/rateLimit.js";
 import { getRateLimiter, RateLimiter } from "@/security/rateLimit.js";
 import { getUsageMeter } from "@/observability/metering.js";
 import { logger } from "@/shared/logger.js";
+import { getTenantContext } from "@/tenancy/context.js";
 
 // Allow handlers to push through `reply.hijack()` and stream SSE without
 // Fastify re-serialising the body.
@@ -65,6 +66,7 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
         (user.tenantId as string | undefined) ??
         (user.tenant_id as string | undefined) ??
         null;
+      const tenantConfigKey = getTenantContext()?.config ? "1" : undefined;
 
       // ---- Rate-limit consume (debit the bucket) -------------------------
       // The preHandler already denied the request if the bucket was empty.
@@ -77,6 +79,7 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
         return streamQuery(request, reply, body, sessionId, graph, start, {
           tenantId,
           userId,
+          tenantConfigKey,
         });
       }
 
@@ -92,6 +95,7 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
             tenantId,
             userId,
             user,
+            tenantConfigKey,
           },
           { configurable: { thread_id: sessionId } },
         );
@@ -183,7 +187,7 @@ async function streamQuery(
   sessionId: string,
   graph: Awaited<ReturnType<typeof getQueryGraph>>,
   start: number,
-  ctx: { tenantId: string | null; userId: string | null },
+  ctx: { tenantId: string | null; userId: string | null; tenantConfigKey?: string },
 ): Promise<FastifyReply> {
   reply.hijack();
   const raw = reply as unknown as RawReply;
@@ -214,6 +218,7 @@ async function streamQuery(
         tenantId: ctx.tenantId,
         userId: ctx.userId,
         user: request.user,
+        tenantConfigKey: ctx.tenantConfigKey,
       },
       {
         streamMode: "messages",

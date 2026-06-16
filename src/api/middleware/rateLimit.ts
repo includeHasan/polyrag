@@ -15,6 +15,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getRateLimiter, RateLimiter, type RateLimitDecision } from "@/security/rateLimit.js";
 import { logger } from "@/shared/logger.js";
+import { getTenantContext } from "@/tenancy/context.js";
 
 export interface RateLimitPreHandlerOptions {
   /** Logical action name, e.g. "query", "ingest". Defaults to the URL path. */
@@ -57,9 +58,14 @@ export function rateLimitPreHandler(opts: RateLimitPreHandlerOptions = {}) {
       (user?.tenant_id as string | undefined) ??
       null;
 
+    const ctx = getTenantContext();
+    const limits = ctx
+      ? { userPerMin: ctx.config.quotas.userPerMin, tenantPerMin: ctx.config.quotas.tenantPerMin }
+      : undefined;
+
     let decision: RateLimitDecision;
     try {
-      decision = await limiter.check(tenantId, userId, action);
+      decision = await limiter.check(tenantId, userId, action, limits);
     } catch (cause) {
       // Defensive: RateLimiter.check() already fail-opens, but if a future
       // change makes it throw, we still never want a 500.

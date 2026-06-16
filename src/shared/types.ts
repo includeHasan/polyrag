@@ -29,6 +29,8 @@ export const ChunkMetadataSchema = z.object({
   date: z.string().optional(),
   department: z.string().optional(),
   tags: z.array(z.string()).default([]),
+  tenantId: z.string().optional(),
+  embeddingModel: z.string().optional(), // the model used to embed this chunk (for safeguard)
 });
 export type ChunkMetadata = z.infer<typeof ChunkMetadataSchema>;
 
@@ -94,6 +96,7 @@ export const IngestRequestSchema = z.object({
   metadata: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).default([]),
   department: z.string().optional(),
+  tenantId: z.string().optional(), // injected by the ingest route from JWT; not user-supplied
 });
 export type IngestRequest = z.infer<typeof IngestRequestSchema>;
 

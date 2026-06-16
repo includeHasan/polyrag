@@ -160,6 +160,8 @@ export interface QueryGraphState {
   userId?: string | null;
   /** Phase 5: full AuthUser payload, when available. */
   user?: unknown;
+  /** Tenant config version stamp threaded into graph state for node-level config resolution. */
+  tenantConfigKey?: string;
   answer?: string;
   sources?: Source[];
   metrics?: {

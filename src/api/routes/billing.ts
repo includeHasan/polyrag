@@ -11,6 +11,13 @@ import { getUsageMeter } from "@/observability/metering.js";
 import { requireUser } from "../middleware/auth.js";
 import { AuthorizationError } from "@/shared/errors.js";
 import { logger } from "@/shared/logger.js";
+import { getTenantContext } from "@/tenancy/context.js";
+
+export interface BillingQuotaResponse {
+  used: number;
+  cap: number | null;
+  remaining: number | null;
+}
 
 export interface BillingUsageResponse {
   tenantId: string | null;
@@ -22,6 +29,31 @@ export interface BillingUsageResponse {
 }
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/api/billing/quota", async (request): Promise<BillingQuotaResponse> => {
+    const user = requireUser(request);
+    const tenantId =
+      (user.tenantId as string | undefined) ??
+      (user.tenant_id as string | undefined) ??
+      null;
+
+    if (!tenantId) {
+      throw new AuthorizationError(
+        "Billing quota requires a tenant-scoped user (missing tenantId claim)",
+      );
+    }
+
+    const ctx = getTenantContext();
+    const monthlyTokenCap = ctx?.config.quotas.monthlyTokenCap ?? null;
+
+    const { start } = currentMonthRangeUtc();
+    const meter = getUsageMeter();
+    const summary = await meter.getTenantUsage(tenantId, start);
+    const used = summary.totalTokens;
+    const remaining = monthlyTokenCap !== null ? Math.max(0, monthlyTokenCap - used) : null;
+
+    return { used, cap: monthlyTokenCap, remaining };
+  });
+
   app.get("/api/billing/usage", async (request): Promise<BillingUsageResponse> => {
     const user = requireUser(request);
     const tenantId =

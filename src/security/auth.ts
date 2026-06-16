@@ -25,9 +25,12 @@ export type { Role } from "./rbac.js";
 export interface UserPayload extends JwtPayload {
   /** Subject (user id) — mirrored from `sub` for convenience. */
   userId: string;
-  /** Roles assigned to the user. */
+  /** Roles assigned to the user. Includes "super_admin" for cross-tenant platform admins. */
   roles: Role[];
-  /** Optional tenant identifier for multi-tenant deployments. */
+  /**
+   * Optional tenant identifier for multi-tenant deployments.
+   * super_admin users may omit this field because they operate across all tenants.
+   */
   tenantId?: string;
 }
 
@@ -62,6 +65,9 @@ export function signToken(payload: Omit<UserPayload, "iat" | "exp">): string {
  * Verify a JWT and return its decoded `UserPayload`. Throws `AuthError` on
  * any verification failure (bad signature, expired, malformed, missing
  * required claims, etc.).
+ *
+ * All roles including "super_admin" are accepted; the caller is responsible
+ * for enforcing role-specific constraints (e.g. tenant isolation).
  */
 export function verifyToken(token: string): UserPayload {
   if (!token || typeof token !== "string") {

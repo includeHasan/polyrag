@@ -111,6 +111,7 @@ export async function verifyAuth(
       sub: process.env.DEV_USER_ID ?? "dev-user",
       roles: ["admin", "editor", "viewer"],
       email: process.env.DEV_USER_EMAIL ?? "dev@localhost",
+      tenantId: process.env.DEV_TENANT_ID ?? "default",
     };
     return;
   }

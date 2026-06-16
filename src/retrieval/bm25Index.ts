@@ -21,6 +21,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { logger } from "@/shared/logger.js";
 import type { Chunk } from "@/shared/types.js";
+import { assertTenantFilter, SYSTEM_SCOPE } from "@/tenancy/guard.js";
 
 const DEFAULT_K1 = 1.5;
 const DEFAULT_B = 0.75;
@@ -38,6 +39,8 @@ export interface BM25Doc {
   len: number;
   /** Cached chunk for retrieval. */
   chunk: Chunk;
+  /** Tenant that owns this document — used for isolation filtering. */
+  tenantId?: string;
 }
 
 export interface BM25SearchHit {
@@ -111,6 +114,7 @@ export class InProcessBM25Index {
       tf,
       len,
       chunk,
+      tenantId: chunk.metadata.tenantId,
     });
     this.totalDocs += 1;
     this.totalLen += len;
@@ -156,8 +160,11 @@ export class InProcessBM25Index {
   /**
    * BM25 search. Returns top-k hits sorted by descending score.
    * If no docs match, returns an empty array.
+   * Pass a tenantId to restrict results to that tenant; pass SYSTEM_SCOPE
+   * (or omit) to search across all tenants (super-admin / system calls only).
    */
-  search(query: string, k: number): BM25SearchHit[] {
+  search(query: string, k: number, tenantId?: string | null): BM25SearchHit[] {
+    assertTenantFilter(tenantId ?? null);
     const queryTokens = tokenize(query);
     if (queryTokens.length === 0 || this.docs.size === 0) return [];
 
@@ -181,7 +188,12 @@ export class InProcessBM25Index {
 
     scores.sort((a, b) => b.score - a.score);
 
-    return scores.slice(0, k).map((entry) => {
+    const filtered =
+      tenantId && tenantId !== SYSTEM_SCOPE
+        ? scores.filter((e) => this.docs.get(e.id)?.tenantId === tenantId)
+        : scores;
+
+    return filtered.slice(0, k).map((entry) => {
       const doc = this.docs.get(entry.id)!;
       return { chunk: doc.chunk, score: entry.score };
     });
@@ -228,6 +240,7 @@ export class InProcessBM25Index {
           tf: new Map(entry.tf),
           len: entry.len,
           chunk: entry.chunk,
+          tenantId: entry.chunk.metadata.tenantId,
         });
       }
       for (const [term, df] of persisted.docFreq) {

@@ -1,34 +1,29 @@
-/**
- * Factory for the platform-wide `Reranker` singleton.
- *
- * Driven by `retrievalConfig.rerankerEnabled`:
- *   - true  → `OpenAiReranker`
- *   - false → `NoopReranker`  (the Phase 1 default)
- */
-import { retrievalConfig } from "../config/index.js";
-import { logger } from "../shared/logger.js";
-import type { Reranker } from "../shared/interfaces.js";
+import { llmConfig, retrievalConfig } from "@/config/index.js";
+import { logger } from "@/shared/logger.js";
+import type { Reranker } from "@/shared/interfaces.js";
+import { createKeyedCache } from "@/shared/keyedCache.js";
+import type { ResolvedTenantConfig } from "@/tenancy/resolve.js";
 import { NoopReranker } from "./noop.js";
 import { OpenAiReranker } from "./openai.js";
 
-let cached: Reranker | undefined;
+const cache = createKeyedCache<Reranker>();
 
-export function getReranker(): Reranker {
-  if (cached) return cached;
-  cached = retrievalConfig.rerankerEnabled
-    ? new OpenAiReranker()
-    : new NoopReranker();
-  logger.info(
-    {
-      reranker: cached.name,
-      rerankerEnabled: retrievalConfig.rerankerEnabled,
-    },
-    "Reranker ready",
-  );
-  return cached;
+export function getReranker(cfg?: ResolvedTenantConfig["retrieval"]): Reranker {
+  const rerankerEnabled = cfg?.rerankerEnabled ?? retrievalConfig.rerankerEnabled;
+  const rerankTopK = cfg?.rerankTopK ?? retrievalConfig.rerankTopK;
+  const rerankModel = llmConfig.rerankModel;
+  const key = `${rerankerEnabled}|${rerankModel}|${rerankTopK}`;
+
+  return cache.get(key, () => {
+    const reranker = rerankerEnabled ? new OpenAiReranker() : new NoopReranker();
+    logger.info(
+      { reranker: reranker.name, rerankerEnabled },
+      "Reranker ready",
+    );
+    return reranker;
+  });
 }
 
-/** Test helper: clear the cached singleton. */
 export function resetReranker(): void {
-  cached = undefined;
+  cache.clear();
 }

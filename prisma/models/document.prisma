@@ -71,6 +71,7 @@ model DocumentPermission {
   id         String   @id @default(uuid()) @db.Uuid
   documentId String   @db.Uuid
   userId     String   @db.Uuid
+  tenantId   String?  @db.Uuid
   canRead    Boolean  @default(true)
   canWrite   Boolean  @default(false)
   canDelete  Boolean  @default(false)
@@ -81,5 +82,6 @@ model DocumentPermission {
 
   @@unique([documentId, userId])
   @@index([userId])
+  @@index([tenantId])
   @@map("document_permissions")
 }

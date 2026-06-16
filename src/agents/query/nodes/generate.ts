@@ -1,18 +1,9 @@
-/**
- * `generate` node — produce the final answer.
- *
- * Uses `getPrompt("retrieval")` to interpolate the standard RAG template
- * with `context`, `sources`, and `query`, then calls the OpenAI chat
- * model via a thin inlined wrapper. (A proper `LLMProvider` factory will
- * replace this in a follow-up; the shape mirrors the interface in
- * `src/shared/interfaces.ts`.)
- */
-import { ChatOpenAI } from "@langchain/openai";
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import { logger } from "../../../shared/logger.js";
-import { env } from "../../../config/env.js";
 import { GenerationError } from "../../../shared/errors.js";
-import { getPrompt } from "../../../prompts/registry.js";
+import { getPromptFor } from "@/prompts/registry.js";
+import { getLLM } from "@/llm/factory.js";
+import { resolveNodeConfig } from "./_config.js";
 import type { QueryState } from "../state.js";
 
 /**
@@ -32,18 +23,6 @@ function formatSources(
     .join("\n");
 }
 
-let llmSingleton: ChatOpenAI | undefined;
-
-/** Lazily build the chat model so we don't blow up at import time. */
-function getLlm(): ChatOpenAI {
-  if (llmSingleton) return llmSingleton;
-  llmSingleton = new ChatOpenAI({
-    model: env.OPENAI_MODEL_GENERATION,
-    apiKey: env.OPENAI_API_KEY,
-    temperature: 0.2,
-  });
-  return llmSingleton;
-}
 
 export async function generateNode(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,6 +35,8 @@ export async function generateNode(
       throw new GenerationError(`[${nodeName}] state.query is empty`);
     }
 
+    const cfg = resolveNodeConfig(state);
+
     logger.info(
       {
         contextChars: state.context?.length ?? 0,
@@ -64,19 +45,16 @@ export async function generateNode(
       `[${nodeName}] start`,
     );
 
-    const promptTemplate = getPrompt("retrieval");
+    const promptTemplate = getPromptFor("retrieval", cfg);
     const sourcesBlock = formatSources(state.sources ?? []);
     const prompt = promptTemplate
       .replace("{context}", state.context ?? "")
       .replace("{sources}", sourcesBlock)
       .replace("{query}", state.query);
 
-    const system = new SystemMessage(
-      "You are a precise assistant. Answer the user's question using only the provided context. " +
-        "Cite sources inline using the bracket numbers (e.g. [1], [2]). If the context is insufficient, say so.",
-    );
+    const system = new SystemMessage(getPromptFor("system", cfg));
 
-    const llm = getLlm();
+    const llm = getLLM({ model: cfg.models.generationModel });
     const response = await llm.invoke([system, { role: "user", content: prompt }]);
     const answer =
       typeof response.content === "string"
@@ -88,7 +66,7 @@ export async function generateNode(
           : String(response.content ?? "");
 
     logger.info(
-      { answerChars: answer.length, model: env.OPENAI_MODEL_GENERATION },
+      { answerChars: answer.length, model: cfg.models.generationModel },
       `[${nodeName}] done`,
     );
 
@@ -99,7 +77,7 @@ export async function generateNode(
       approved: true,
       metadata: {
         ...state.metadata,
-        model: env.OPENAI_MODEL_GENERATION,
+        model: cfg.models.generationModel,
         answerChars: answer.length,
         node: nodeName,
       },

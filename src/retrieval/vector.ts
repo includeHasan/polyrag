@@ -53,12 +53,19 @@ export class VectorRetriever extends BaseRetriever {
   /**
    * Combine the always-applied understanding filters with the optional
    * per-call options filter. Options take precedence on key conflicts.
+   * The result is a Qdrant `must` filter so tenantId and any other keys
+   * are enforced server-side.
    */
   private mergeFilters(
     base: Record<string, unknown> | undefined,
     extra: Record<string, unknown> | undefined,
   ): Record<string, unknown> | undefined {
-    if (!base && !extra) return undefined;
-    return { ...(base ?? {}), ...(extra ?? {}) };
+    const flat: Record<string, unknown> = { ...(base ?? {}), ...(extra ?? {}) };
+    if (Object.keys(flat).length === 0) return undefined;
+    const must = Object.entries(flat).map(([key, value]) => ({
+      key,
+      match: { value },
+    }));
+    return { must };
   }
 }

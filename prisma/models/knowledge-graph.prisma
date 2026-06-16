@@ -39,6 +39,7 @@ model Entity {
 model EntityMention {
   id       String   @id @default(uuid())
   entityId String
+  tenantId String?
   chunkId  String
   position Int      @default(0)
   context  String   @default("")
@@ -46,6 +47,7 @@ model EntityMention {
   entity   Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([entityId])
+  @@index([tenantId])
   @@index([chunkId])
   @@map("entity_mentions")
 }
@@ -56,6 +58,7 @@ model EntityMention {
 model EntityRelation {
   id           String   @id @default(uuid())
   fromEntityId String
+  tenantId     String?
   toEntityId   String
   relation     String
   weight       Float    @default(1.0)
@@ -66,6 +69,7 @@ model EntityRelation {
   toEntity     Entity   @relation("EntityRelationTo",   fields: [toEntityId],   references: [id], onDelete: Cascade)
 
   @@index([fromEntityId])
+  @@index([tenantId])
   @@index([toEntityId])
   @@index([relation])
   @@index([documentId])

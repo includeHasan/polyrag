@@ -23,6 +23,7 @@ import { env } from "@/config/env.js";
 import { buildErrorHandler } from "./middleware/errorHandler.js";
 import { registerRequestLogger } from "./middleware/requestLogger.js";
 import { verifyAuth } from "./middleware/auth.js";
+import { tenantContextMiddleware } from "./middleware/tenantContext.js";
 import { registerRoutes } from "./routes/index.js";
 import { setQueryGraphModule, type CompiledQueryGraph } from "./deps.js";
 
@@ -81,6 +82,7 @@ export async function createServer(): Promise<FastifyInstance> {
   // Auth preHandler. Populates `request.user`; never 401s on its own.
   // -------------------------------------------------------------------------
   app.addHook("preHandler", verifyAuth);
+  app.addHook("preHandler", tenantContextMiddleware);
 
   // -------------------------------------------------------------------------
   // Global error handler — maps RagError → HTTP status.

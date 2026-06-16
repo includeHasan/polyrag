@@ -1,30 +1,32 @@
 /**
  * Role-based access control.
  *
- * Roles form a strict hierarchy: `admin > editor > viewer`.
+ * Roles form a strict hierarchy: `super_admin > admin > editor > viewer`.
  * `hasRole(user, "viewer")` is true for any user with at least a viewer
- * role; `hasRole(user, "admin")` is true only for admins.
+ * role; `hasRole(user, "admin")` is true only for admins and super_admins.
  *
  * Phase 5 adds:
  *   - `enforceRole`     — throws on insufficient role.
  *   - `requirePermission` — checks a fine-grained action against the
- *      role-permission matrix (admin: all; editor: ingest, query,
- *      reindex, search, view; viewer: query, search, view).
+ *      role-permission matrix (super_admin: all + tenant ops; admin: all;
+ *      editor: ingest, query, reindex, search, view; viewer: query, search, view).
+ *   - `requireSameTenant` — enforces tenant isolation (bypassed for super_admin).
  */
 import type { UserPayload } from "./auth.js";
 import { AuthorizationError } from "../shared/errors.js";
 
-export type Role = "admin" | "editor" | "viewer";
+export type Role = "super_admin" | "admin" | "editor" | "viewer";
 
 /** Numeric rank for hierarchical comparisons. Higher = more privileged. */
 const ROLE_RANK: Record<Role, number> = {
   viewer: 1,
   editor: 2,
   admin: 3,
+  super_admin: 4,
 };
 
 /** All known roles in ascending order of privilege. */
-export const ROLES: readonly Role[] = ["viewer", "editor", "admin"] as const;
+export const ROLES: readonly Role[] = ["viewer", "editor", "admin", "super_admin"] as const;
 
 /** Action names recognised by `requirePermission`. */
 export type PermissionAction =
@@ -36,13 +38,16 @@ export type PermissionAction =
   | "delete"
   | "manage_users"
   | "manage_billing"
+  | "manage_tenants"
+  | "manage_tenant_config"
   | string;
 
 /**
  * Role → set of permitted actions. The wildcard `"*"` represents
- * unrestricted access (admin).
+ * unrestricted access (admin and above).
  */
 export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<string>> = {
+  super_admin: new Set<string>(["*", "manage_tenants", "manage_tenant_config", "manage_users", "manage_billing"]),
   admin: new Set<string>(["*"]),
   editor: new Set<string>(["ingest", "query", "reindex", "search", "view"]),
   viewer: new Set<string>(["query", "search", "view"]),
@@ -157,4 +162,15 @@ export function hasPermission(
   if (!role) return false;
   const perms = ROLE_PERMISSIONS[role];
   return perms.has("*") || perms.has(action);
+}
+
+/**
+ * Enforce tenant isolation for the given target tenant. Super_admin users
+ * may access any tenant; all other users must belong to the same tenant.
+ */
+export function requireSameTenant(user: UserPayload, targetTenantId: string): void {
+  if (hasRole(user, "super_admin")) return;
+  if (user.tenantId !== targetTenantId) {
+    throw new AuthorizationError("Cannot access resources of another tenant");
+  }
 }

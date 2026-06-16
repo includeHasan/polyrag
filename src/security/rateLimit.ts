@@ -83,10 +83,14 @@ export class RateLimiter {
     tenantId: string | null | undefined,
     userId: string | null | undefined,
     action: string,
+    limits?: { userPerMin?: number; tenantPerMin?: number },
   ): Promise<RateLimitDecision> {
+    const effectiveUserPerMin = limits?.userPerMin ?? this.userPerMin;
+    const effectiveTenantPerMin = limits?.tenantPerMin ?? this.tenantPerMin;
+
     const window = currentWindow();
     const resetAt = new Date((window + 1) * WINDOW_SECONDS * 1000);
-    const limit = this.userPerMin; // user-bucket is the more restrictive
+    const limit = effectiveUserPerMin;
     const retryAfterSeconds = Math.max(1, resetAt.getTime() - Date.now()) / 1000;
 
     // Anonymous / no-id traffic: still get a tenant-bucket (or global fallback)
@@ -104,25 +108,25 @@ export class RateLimiter {
         redis.get(tenantKey).then((v) => (v ? Number.parseInt(v, 10) : 0)),
       ]);
 
-      const userRemaining = Math.max(0, this.userPerMin - userCount);
-      const tenantRemaining = Math.max(0, this.tenantPerMin - tenantCount);
+      const userRemaining = Math.max(0, effectiveUserPerMin - userCount);
+      const tenantRemaining = Math.max(0, effectiveTenantPerMin - tenantCount);
 
-      if (userCount >= this.userPerMin) {
+      if (userCount >= effectiveUserPerMin) {
         return {
           allowed: false,
           remaining: 0,
           resetAt,
-          limit: this.userPerMin,
+          limit: effectiveUserPerMin,
           deniedBy: "user",
           retryAfterSeconds,
         };
       }
-      if (tenantCount >= this.tenantPerMin) {
+      if (tenantCount >= effectiveTenantPerMin) {
         return {
           allowed: false,
           remaining: 0,
           resetAt,
-          limit: this.tenantPerMin,
+          limit: effectiveTenantPerMin,
           deniedBy: "tenant",
           retryAfterSeconds,
         };
@@ -141,9 +145,9 @@ export class RateLimiter {
       );
       return {
         allowed: true,
-        remaining: this.userPerMin,
+        remaining: effectiveUserPerMin,
         resetAt,
-        limit: this.userPerMin,
+        limit: effectiveUserPerMin,
       };
     }
   }
@@ -157,6 +161,7 @@ export class RateLimiter {
     tenantId: string | null | undefined,
     userId: string | null | undefined,
     action: string,
+    limits?: { userPerMin?: number; tenantPerMin?: number },
   ): Promise<void> {
     const window = currentWindow();
     const effectiveUserId = userId ?? "anon";

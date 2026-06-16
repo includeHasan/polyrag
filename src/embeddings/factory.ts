@@ -1,35 +1,27 @@
-/**
- * Factory for the platform-wide `EmbeddingProvider` singleton.
- *
- * Returns a cached `CachedEmbeddingProvider(OpenAIEmbeddingProvider)` so
- * repeated calls share both the underlying OpenAI client and the Redis
- * connection. Tests / scripts that need a fresh instance can call
- * `resetEmbeddingProvider()` or instantiate the classes directly.
- */
-import { logger } from "../shared/logger.js";
-import type { EmbeddingProvider } from "../shared/interfaces.js";
+import { llmConfig } from "@/config/index.js";
+import { logger } from "@/shared/logger.js";
+import type { EmbeddingProvider } from "@/shared/interfaces.js";
+import { createKeyedCache } from "@/shared/keyedCache.js";
+import type { ResolvedTenantConfig } from "@/tenancy/resolve.js";
 import { CachedEmbeddingProvider } from "./cache.js";
 import { OpenAIEmbeddingProvider } from "./openai.js";
 
-let cached: EmbeddingProvider | undefined;
+const cache = createKeyedCache<EmbeddingProvider>();
 
-export function getEmbeddingProvider(): EmbeddingProvider {
-  if (cached) return cached;
-  const inner = new OpenAIEmbeddingProvider();
-  const wrapped = new CachedEmbeddingProvider(inner);
-  cached = wrapped;
-  logger.info(
-    {
-      model: wrapped.model,
-      dimension: wrapped.dimension,
-      cache: "redis",
-    },
-    "EmbeddingProvider ready",
-  );
-  return cached;
+export function getEmbeddingProvider(cfg?: Pick<ResolvedTenantConfig, "models">): EmbeddingProvider {
+  void cfg;
+  const key = `${llmConfig.embeddingModel}|${llmConfig.embeddingDim}`;
+  return cache.get(key, () => {
+    const inner = new OpenAIEmbeddingProvider();
+    const wrapped = new CachedEmbeddingProvider(inner);
+    logger.info(
+      { model: wrapped.model, dimension: wrapped.dimension, cache: "redis" },
+      "EmbeddingProvider ready",
+    );
+    return wrapped;
+  });
 }
 
-/** Test helper: clear the cached singleton. */
 export function resetEmbeddingProvider(): void {
-  cached = undefined;
+  cache.clear();
 }

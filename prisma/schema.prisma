@@ -89,6 +89,7 @@ model DocumentPermission {
   id         String   @id @default(uuid()) @db.Uuid
   documentId String   @db.Uuid
   userId     String   @db.Uuid
+  tenantId   String?  @db.Uuid
   canRead    Boolean  @default(true)
   canWrite   Boolean  @default(false)
   canDelete  Boolean  @default(false)
@@ -99,6 +100,7 @@ model DocumentPermission {
 
   @@unique([documentId, userId])
   @@index([userId])
+  @@index([tenantId])
   @@map("document_permissions")
 }
 
@@ -121,6 +123,7 @@ enum IngestionJobStatus {
 model IngestionJob {
   id           String            @id @default(uuid()) @db.Uuid
   documentId   String?           @db.Uuid
+  tenantId     String?           @db.Uuid
   source       DocumentSource
   sourceUri    String?
   status       IngestionJobStatus @default(QUEUED)
@@ -139,6 +142,7 @@ model IngestionJob {
 
   @@index([status])
   @@index([documentId])
+  @@index([tenantId])
   @@index([queuedAt])
   @@map("ingestion_jobs")
 }
@@ -186,6 +190,7 @@ model Entity {
 model EntityMention {
   id       String   @id @default(uuid())
   entityId String
+  tenantId String?
   chunkId  String
   position Int      @default(0)
   context  String   @default("")
@@ -193,6 +198,7 @@ model EntityMention {
   entity   Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@index([entityId])
+  @@index([tenantId])
   @@index([chunkId])
   @@map("entity_mentions")
 }
@@ -203,6 +209,7 @@ model EntityMention {
 model EntityRelation {
   id           String   @id @default(uuid())
   fromEntityId String
+  tenantId     String?
   toEntityId   String
   relation     String
   weight       Float    @default(1.0)
@@ -213,6 +220,7 @@ model EntityRelation {
   toEntity     Entity   @relation("EntityRelationTo",   fields: [toEntityId],   references: [id], onDelete: Cascade)
 
   @@index([fromEntityId])
+  @@index([tenantId])
   @@index([toEntityId])
   @@index([relation])
   @@index([documentId])
@@ -231,6 +239,7 @@ model QueryLog {
   id          String   @id @default(uuid()) @db.Uuid
   sessionId   String?  @db.Uuid
   userId      String?  @db.Uuid
+  tenantId    String?  @db.Uuid
   query       String
   answer      String?
   intent      String?
@@ -253,6 +262,7 @@ model QueryLog {
 
   @@index([sessionId])
   @@index([userId])
+  @@index([tenantId])
   @@index([createdAt])
   @@map("query_logs")
 }
@@ -261,6 +271,7 @@ model Feedback {
   id          String   @id @default(uuid()) @db.Uuid
   queryLogId  String   @db.Uuid
   userId      String?  @db.Uuid
+  tenantId    String?  @db.Uuid
   rating      Int      // 1-5
   thumbsUp    Boolean?
   comment     String?
@@ -271,6 +282,7 @@ model Feedback {
 
   @@index([queryLogId])
   @@index([userId])
+  @@index([tenantId])
   @@index([createdAt])
   @@map("feedback")
 }
@@ -286,6 +298,7 @@ model Feedback {
 model Session {
   id        String   @id @default(uuid())
   userId    String?
+  tenantId  String?
   title     String?
   isActive  Boolean  @default(true)
   metadata  Json     @default("{}")
@@ -294,6 +307,7 @@ model Session {
   expiresAt DateTime? @db.Timestamptz
 
   @@index([userId])
+  @@index([tenantId])
   @@index([isActive])
   @@map("sessions")
 }
@@ -301,13 +315,59 @@ model Session {
 model UserPreference {
   id        String   @id @default(uuid())
   userId    String
+  tenantId  String?
   key       String
   value     Json
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([userId, key])
   @@index([userId])
+  @@index([tenantId])
   @@map("user_preferences")
+}
+
+// ---- tenant.prisma ----
+
+// ============================================================================
+// prisma/models/tenant.prisma
+// Tenant entity and per-tenant configuration overrides.
+// Composed into schema.prisma by prisma/build.ts.
+// ============================================================================
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model Tenant {
+  id        String       @id @default(uuid()) @db.Uuid
+  slug      String       @unique  // URL-safe identifier e.g. "acme-legal"
+  name      String
+  status    TenantStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @db.Timestamptz
+  updatedAt DateTime     @updatedAt @db.Timestamptz
+
+  config TenantConfig?
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+/// Per-tenant configuration overrides.
+/// The `config` JSON column holds a TenantConfigOverrides object (partial
+/// ResolvedTenantConfig). Global env defaults fill any absent keys.
+/// Bump `version` on every update to invalidate cached resolved configs.
+model TenantConfig {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @db.Uuid
+  config   Json   @default("{}")  // TenantConfigOverrides partial
+  version  Int    @default(1)      // bumped on each update; used as cache key
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_configs")
 }
 
 // ---- usage.prisma ----

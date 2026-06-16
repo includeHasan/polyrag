@@ -93,6 +93,31 @@ export class UsageMeter {
   }
 
   /**
+   * Returns true if the tenant's current-month token consumption is under
+   * monthlyTokenCap, false if they have met or exceeded it. Fail-open on
+   * database errors so a metering fault never blocks requests.
+   */
+  async checkMonthlyQuota(tenantId: string, monthlyTokenCap: number): Promise<boolean> {
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    try {
+      const prisma = getPrisma();
+      const result = await prisma.usageEvent.aggregate({
+        where: { tenantId, createdAt: { gte: monthStart } },
+        _sum: { tokensUsed: true },
+      });
+      const used = result._sum.tokensUsed ?? 0;
+      return used < monthlyTokenCap;
+    } catch (cause) {
+      logger.error(
+        { err: cause, tenantId, monthlyTokenCap },
+        "UsageMeter.checkMonthlyQuota failed; allowing through",
+      );
+      return true;
+    }
+  }
+
+  /**
    * Aggregate every `usage_events` row for `tenantId` with
    * `createdAt >= since`. Returns a summary suitable for the billing
    * endpoint.

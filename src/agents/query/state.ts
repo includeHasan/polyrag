@@ -35,6 +35,7 @@ const definition: any = {
   // retrieve node can apply tenant filters and per-document ACLs.
   tenantId: z.string().nullable().optional(),
   userId: z.string().nullable().optional(),
+  tenantConfigKey: z.string().optional(),
   // Full AuthUser (shape is loose; cast to unknown to keep zod happy).
   user: z.any().optional(),
   understanding: QueryUnderstandingSchema.optional(),

@@ -44,11 +44,14 @@ export class HybridRetriever extends BaseRetriever {
   ): Promise<Chunk[]> {
     try {
       const topK = options?.topK ?? 10;
+      const tenantId = options?.filter?.tenantId as string | undefined;
+      const filter: Record<string, unknown> = tenantId != null
+        ? { ...(options?.filter ?? {}), tenantId }
+        : { ...(options?.filter ?? {}) };
 
-      // Run both legs in parallel; the keyword side is a Phase 2 stub.
       const [vecHits, kwHits] = await Promise.all([
-        this.vector.retrieve(query, understanding, options),
-        this.keyword.retrieve(query, understanding, options),
+        this.vector.retrieve(query, understanding, { ...options, filter }),
+        this.keyword.retrieve(query, understanding, { ...options, filter }),
       ]);
 
       const fused = this.reciprocalRankFusion(vecHits, kwHits);

@@ -53,6 +53,7 @@ export async function ensureIndex(index: string = env.ELASTICSEARCH_INDEX): Prom
         properties: {
           chunkId: { type: "keyword" },
           documentId: { type: "keyword" },
+          tenantId: { type: "keyword" },
           text: { type: "text", analyzer: "standard" },
           section: { type: "keyword" },
           page: { type: "integer" },
@@ -87,6 +88,7 @@ export async function indexChunks(
       operations.push({
         chunkId: chunk.chunkId,
         documentId: chunk.documentId,
+        tenantId: chunk.metadata.tenantId ?? "default",
         text: chunk.text,
         section: chunk.section ?? null,
         page: chunk.page ?? null,
@@ -144,7 +146,7 @@ export interface KeywordSearchHit {
 export async function keywordSearch(
   query: string,
   k: number,
-  filter?: Record<string, unknown>,
+  filter?: Record<string, string>,
   index: string = env.ELASTICSEARCH_INDEX,
 ): Promise<KeywordSearchHit[]> {
   try {
@@ -154,7 +156,7 @@ export async function keywordSearch(
       query: {
         bool: {
           must: [{ match: { text: query } }],
-          filter: filter ? [filter] : [],
+          filter: filter?.tenantId ? [{ term: { tenantId: filter.tenantId } }] : [],
         },
       },
     });

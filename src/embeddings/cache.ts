@@ -49,12 +49,8 @@ export class CachedEmbeddingProvider extends BaseEmbeddingProvider {
   }
 
   private key(text: string): string {
-    const hash = createHash("sha256")
-      .update(this.model)
-      .update("|")
-      .update(text)
-      .digest("hex");
-    return `${KEY_PREFIX}${hash}`;
+    const hash = createHash("sha256").update(text).digest("hex");
+    return `${KEY_PREFIX}${this.model}:${hash}`;
   }
 
   async embed(text: string): Promise<number[]> {
