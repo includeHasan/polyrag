@@ -284,8 +284,8 @@ model Feedback {
 // ============================================================================
 
 model Session {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String?  @db.Uuid
+  id        String   @id @default(uuid())
+  userId    String?
   title     String?
   isActive  Boolean  @default(true)
   metadata  Json     @default("{}")
@@ -299,8 +299,8 @@ model Session {
 }
 
 model UserPreference {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
+  id        String   @id @default(uuid())
+  userId    String
   key       String
   value     Json
   updatedAt DateTime @updatedAt @db.Timestamptz

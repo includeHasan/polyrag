@@ -12,7 +12,7 @@
  *     fetches the profile, upserts a `User` row, mints a JWT, and returns
  *     the token to the caller.
  *
- * Supported providers: `google`, `github`. Unknown providers → 404.
+ * Supported providers: `google`, `github`. Unknown providers → 400.
  *
  * Cookie handling: we read/write the `Set-Cookie` / `Cookie` headers via
  * the raw Node.js request/response objects so the route works without the
@@ -111,7 +111,17 @@ function readStateCookie(request: FastifyRequest): string | undefined {
 export async function oauth2Routes(app: FastifyInstance): Promise<void> {
   // ---- /login ---------------------------------------------------------
   app.get("/api/oauth2/:provider/login", async (request, reply) => {
-    const provider = parseProvider(request);
+    const parsedProvider = parseProvider(request);
+    if (!parsedProvider.ok) {
+      return reply.code(400).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: `Unsupported OAuth2 provider: '${parsedProvider.raw}'`,
+          details: { supported: SUPPORTED },
+        },
+      });
+    }
+    const provider = parsedProvider.provider;
     const state = randomBytes(16).toString("hex");
 
     setStateCookie(reply, state);
@@ -125,7 +135,17 @@ export async function oauth2Routes(app: FastifyInstance): Promise<void> {
 
   // ---- /callback ------------------------------------------------------
   app.get("/api/oauth2/:provider/callback", async (request, reply) => {
-    const provider = parseProvider(request);
+    const parsedProvider = parseProvider(request);
+    if (!parsedProvider.ok) {
+      return reply.code(400).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: `Unsupported OAuth2 provider: '${parsedProvider.raw}'`,
+          details: { supported: SUPPORTED },
+        },
+      });
+    }
+    const provider = parsedProvider.provider;
 
     const parsed = CallbackQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -177,16 +197,16 @@ export async function oauth2Routes(app: FastifyInstance): Promise<void> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseProvider(request: FastifyRequest): SupportedProvider {
+type ProviderParseResult =
+  | { ok: true; provider: SupportedProvider }
+  | { ok: false; raw: string };
+
+function parseProvider(request: FastifyRequest): ProviderParseResult {
   const raw = (request.params as { provider?: string } | undefined)?.provider ?? "";
   if (!isSupported(raw)) {
-    const err: Error & { statusCode?: number } = new Error(
-      `Unsupported OAuth2 provider: '${raw}'`,
-    );
-    err.statusCode = 404;
-    throw err;
+    return { ok: false, raw };
   }
-  return raw;
+  return { ok: true, provider: raw };
 }
 
 function isSupported(s: string): s is SupportedProvider {

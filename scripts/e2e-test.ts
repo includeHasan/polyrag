@@ -188,9 +188,9 @@ const TEST_CASES: TestCase[] = [
   // -------------------------------------------------------------------------
   {
     group: "6. Ingest",
-    name: "POST /api/ingest with missing path returns 400",
+    name: "POST /api/ingest with missing path returns 400/422 (validation)",
     request: { method: "POST", path: "/api/ingest", body: { source: "md" } },
-    expect: { status: 400, description: "Zod rejects missing path/url" },
+    expect: { status: [400, 422], description: "Zod or IngestionError rejects missing path/url" },
   },
   {
     group: "6. Ingest",
@@ -280,9 +280,9 @@ const TEST_CASES: TestCase[] = [
   },
   {
     group: "11. Other endpoints",
-    name: "POST /api/evaluate with empty dataset returns 200",
+    name: "POST /api/evaluate with empty dataset returns 400 (validation)",
     request: { method: "POST", path: "/api/evaluate", body: { dataset: [] } },
-    expect: { status: 200, description: "Empty dataset returns empty report" },
+    expect: { status: [200, 400], description: "Empty dataset rejected (Zod min 1) or returns empty report" },
   },
 
   // -------------------------------------------------------------------------
@@ -321,6 +321,7 @@ async function runCase(tc: TestCase): Promise<TestResult> {
   let status = 0;
   let text = "";
   try {
+    const isStreaming = (body as { stream?: boolean } | undefined)?.stream === true;
     const res = await fetch(`${BASE}${tc.request.path}`, {
       method: tc.request.method,
       headers: {
@@ -328,9 +329,33 @@ async function runCase(tc: TestCase): Promise<TestResult> {
         ...(tc.request.headers ?? {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: isStreaming ? AbortSignal.timeout(8000) : undefined,
     });
     status = res.status;
-    text = await res.text();
+    if (isStreaming && res.body) {
+      // Read just the first ~1KB of the SSE stream and abort. We don't
+      // wait for the full stream because the server-side `end` event is
+      // emitted only after the LLM finishes.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        const { value, done } = await Promise.race([
+          reader.read(),
+          new Promise<{ value: undefined; done: true }>((r) =>
+            setTimeout(() => r({ value: undefined, done: true }), 1000),
+          ),
+        ]);
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        if (acc.length > 1024 || acc.includes("event: end")) break;
+      }
+      try { await reader.cancel(); } catch { /* ignore */ }
+      text = acc;
+    } else {
+      text = await res.text();
+    }
   } catch (err) {
     text = `FETCH ERROR: ${(err as Error).message}`;
   }

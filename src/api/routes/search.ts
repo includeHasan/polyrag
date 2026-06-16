@@ -4,9 +4,16 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { ChunkSchema, type Chunk, type Source } from "@/shared/types.js";
+import {
+  ChunkSchema,
+  SourceSchema,
+  type Chunk,
+  type QueryUnderstanding,
+  type Source,
+} from "@/shared/types.js";
 import { getObservability, getRetrieval } from "../deps.js";
 import { RetrievalError } from "@/shared/errors.js";
+import type { Retriever as RetrieverInterface } from "@/shared/interfaces.js";
 
 const SearchRequestSchema = z.object({
   query: z.string().min(1),
@@ -16,13 +23,38 @@ const SearchRequestSchema = z.object({
 
 const SearchResponseSchema = z.object({
   chunks: z.array(ChunkSchema),
-  sources: z.array(z.unknown()),
+  sources: z.array(SourceSchema),
 });
 
 type SearchRequest = z.infer<typeof SearchRequestSchema>;
 interface SearchResponse {
   chunks: Chunk[];
   sources: Source[];
+}
+
+/**
+ * Project a list of retrieved chunks into citation `Source` records.
+ * Mirrors the projection used by `ContextBuilder.toSource` so the API
+ * surface stays consistent between `/api/search` and `/api/query`.
+ */
+function chunksToSources(chunks: Chunk[]): Source[] {
+  return chunks.map((c) => {
+    const meta = c.metadata as Record<string, unknown> | undefined;
+    const fromMeta = meta?.title;
+    const title =
+      typeof fromMeta === "string" && fromMeta.length > 0
+        ? fromMeta
+        : c.section ?? c.documentId;
+    const snippet =
+      c.text.length > 240 ? `${c.text.slice(0, 240).trim()}...` : c.text;
+    return {
+      documentId: c.documentId,
+      title,
+      page: c.page,
+      chunkId: c.chunkId,
+      snippet,
+    };
+  });
 }
 
 export async function searchRoutes(app: FastifyInstance): Promise<void> {
@@ -32,13 +64,22 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) throw parsed.error;
     const body: SearchRequest = parsed.data;
 
-    let result;
+    let chunks: Chunk[];
     try {
       const { getRetriever } = await getRetrieval();
-      const retriever = await getRetriever();
-      result = await retriever.retrieve(body.query, {
+      // The dynamic-import wrapper in `../deps.js` returns a structurally
+      // different `Retriever` shape, so cast to the real contract used by
+      // `src/retrieval/*` (defined in `src/shared/interfaces.ts`).
+      const retriever = (await getRetriever()) as unknown as RetrieverInterface;
+      const understanding: QueryUnderstanding = {
+        intent: "factual",
+        entities: [],
+        filters: body.filters ?? {},
+        rewrittenQueries: [],
+      };
+      chunks = await retriever.retrieve(body.query, understanding, {
         topK: body.topK,
-        filters: body.filters,
+        filter: body.filters,
       });
     } catch (err) {
       if (err instanceof RetrievalError) throw err;
@@ -46,8 +87,8 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const response: SearchResponse = {
-      chunks: result.chunks,
-      sources: result.sources,
+      chunks,
+      sources: chunksToSources(chunks),
     };
 
     try {

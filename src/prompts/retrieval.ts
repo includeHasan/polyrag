@@ -14,4 +14,6 @@ Sources:
 
 User question: {{query}}
 
+Reminder: Answer ONLY from the Context above. If the Context does not contain the answer, reply exactly: "I don't have information about that in the provided context." Do NOT use general knowledge.
+
 Answer:`;

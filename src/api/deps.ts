@@ -102,9 +102,15 @@ export interface RetrievalModule {
 let _retrieval: RetrievalModule | null = null;
 export async function getRetrieval(): Promise<RetrievalModule> {
   if (_retrieval) return _retrieval;
-  // @ts-expect-error — module is owned by retrieval layer; type cast on next line.
-  const mod = await import("@/retrieval/index.js");
-  _retrieval = mod as unknown as RetrievalModule;
+  // Import the actual factory function — `getRetriever()` — from the
+  // retrieval layer. (No `src/retrieval/index.ts` barrel exists; the
+  // factory is the single public entry point.) The shape returned here
+  // matches the `Retriever` interface in `@/shared/interfaces.js`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod = await import("@/retrieval/factory.js") as any;
+  _retrieval = {
+    getRetriever: async () => mod.getRetriever(),
+  };
   return _retrieval;
 }
 
