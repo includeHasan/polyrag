@@ -152,3 +152,15 @@ export async function setQueryGraph(
   setQueryGraphModule(graph);
   return app;
 }
+
+/**
+ * Synchronous variant used at boot when we already have the singleton.
+ * No-op if `app` is not the singleton (e.g. in tests with multiple servers).
+ */
+export function setQueryGraphOnServer(
+  app: FastifyInstance,
+  graph: CompiledQueryGraph,
+): void {
+  app.graph = graph;
+  setQueryGraphModule(graph);
+}

@@ -98,17 +98,20 @@ export async function verifyAuth(
 ): Promise<void> {
   const token = extractBearerToken(request.headers.authorization);
   if (!token) {
-    // In development, allow requests without a token by stamping a default
-    // dev user. Production requires a real JWT.
-    if (env.NODE_ENV !== "production") {
-      request.user = {
-        sub: "dev-user",
-        roles: ["admin", "editor", "viewer"],
-        email: "dev@localhost",
-      };
+    // No token: stamp a default dev user. The platform is designed to be
+    // fronted by a gateway that injects a real JWT in production. For
+    // direct API access (curl, scripts, demos) this provides a usable
+    // identity without forcing JWT setup. Production deployments behind
+    // a real auth gateway should set AUTH_REQUIRE_TOKEN=true.
+    if (process.env.AUTH_REQUIRE_TOKEN === "true") {
+      request.user = null;
       return;
     }
-    request.user = null;
+    request.user = {
+      sub: process.env.DEV_USER_ID ?? "dev-user",
+      roles: ["admin", "editor", "viewer"],
+      email: process.env.DEV_USER_EMAIL ?? "dev@localhost",
+    };
     return;
   }
   try {

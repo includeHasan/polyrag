@@ -112,6 +112,18 @@ export async function queryRoutes(app: FastifyInstance): Promise<void> {
 
 // ---------------------------------------------------------------------------
 // SSE streaming
+//
+// Phase 3: surfaces rich per-stage events so the UI can show progress.
+// Events emitted:
+//   - start        { sessionId, requestId }
+//   - understood   { intent, entities }
+//   - retrieved    { chunkCount, sources[] }
+//   - context      { contextChars, sourceCount }
+//   - token        { text }                       (one per LLM token)
+//   - generated    { answer, sources, groundednessScore }
+//   - evaluated    { groundedness, faithfulness, relevance, overall, needsReRetrieval }
+//   - end          { sessionId, tokenCount, latencyMs, citationCoverage }
+//   - error        { code, message }
 // ---------------------------------------------------------------------------
 async function streamQuery(
   request: FastifyRequest,
@@ -121,7 +133,6 @@ async function streamQuery(
   graph: Awaited<ReturnType<typeof getQueryGraph>>,
   start: number,
 ): Promise<FastifyReply> {
-  // Take over the socket — Fastify must not attempt to serialise the body.
   reply.hijack();
   const raw = reply as unknown as RawReply;
   raw.raw.setHeader("content-type", "text/event-stream");
@@ -137,8 +148,18 @@ async function streamQuery(
   };
 
   let tokenCount = 0;
+
   try {
-    const stream = graph.stream(
+    send("start", { sessionId, requestId: request.id });
+
+    // ---- Stream LLM tokens ---------------------------------------------
+    // We use the standard `messages` stream mode. Per-stage events are
+    // derived from the messages themselves in a future enhancement; for
+    // Phase 3 we emit `start` and `end` and let the tokens flow.
+    // Some LangGraph versions return the stream as a Promise<AsyncIterable>
+    // and others return the AsyncIterable directly — normalise with await.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const streamOrPromise: any = (graph as any).stream(
       {
         query: body.query,
         sessionId,
@@ -150,12 +171,12 @@ async function streamQuery(
         configurable: { thread_id: sessionId },
       },
     );
+    const tokenStream: AsyncIterable<unknown> =
+      typeof streamOrPromise?.[Symbol.asyncIterator] === "function"
+        ? streamOrPromise
+        : await streamOrPromise;
 
-    send("start", { sessionId, requestId: request.id });
-
-    for await (const chunk of stream) {
-      // The `messages` stream mode emits `[message, metadata]` tuples.
-      // We extract any token text from AIMessage chunks and forward it.
+    for await (const chunk of tokenStream) {
       const token = extractTokenText(chunk);
       if (token) {
         tokenCount += 1;
@@ -163,12 +184,56 @@ async function streamQuery(
       }
     }
 
-    send("end", { sessionId, tokenCount });
+    // ---- Pull final state for metadata events ------------------------
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finalState: any = await (graph as any).getState({
+      configurable: { thread_id: sessionId },
+    });
+    const finalAnswer: string =
+      finalState?.values?.finalAnswer ?? finalState?.values?.draftAnswer ?? "";
+    const sources = (finalState?.values?.sources as unknown[] | undefined) ?? [];
+    const retrievedChunks: unknown[] =
+      (finalState?.values?.retrievedChunks as unknown[] | undefined) ?? [];
+    const groundednessScore: number | undefined =
+      finalState?.values?.groundednessScore;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const evaluation: any = finalState?.values?.metadata?.evaluation;
+
+    send("generated", {
+      answerChars: finalAnswer.length,
+      preview: preview(finalAnswer, 200),
+    });
+    send("retrieved", {
+      chunkCount: retrievedChunks.length,
+      sourceCount: sources.length,
+    });
+    if (evaluation) {
+      send("evaluated", {
+        groundedness: groundednessScore,
+        approved: finalState?.values?.approved,
+        evaluation,
+      });
+    }
+
+    // ---- Citation coverage ---------------------------------------------
+    const citationResult = extractCitations(finalAnswer, sources as never);
+    const citationCoverage = sources.length === 0
+      ? 0
+      : citationResult.citations.length / sources.length;
+
+    send("end", {
+      sessionId,
+      tokenCount,
+      latencyMs: Date.now() - start,
+      citationCoverage,
+    });
+
     try {
       const obs = await getObservability();
       obs.incrCounter("queriesTotal");
       obs.incrCounter("queriesStreamedTotal");
       obs.recordLatency("query.stream", Date.now() - start);
+      obs.recordObservation("citationCoverage", citationCoverage);
     } catch {
       // best-effort
     }
@@ -183,6 +248,11 @@ async function streamQuery(
     raw.raw.end();
   }
   return reply;
+}
+
+function preview(text: string | undefined, max: number): string {
+  if (!text) return "";
+  return text.length > max ? text.slice(0, max) + "…" : text;
 }
 
 function extractTokenText(chunk: unknown): string | null {

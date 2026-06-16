@@ -8,16 +8,25 @@ import "dotenv/config";
 import { env } from "@/config/env.js";
 import { serverConfig } from "@/config/index.js";
 import { logger } from "@/shared/logger.js";
-import { createServer } from "@/api/server.js";
+import { getServer, setQueryGraphOnServer } from "@/api/server.js";
 import { graph as queryGraph } from "@/agents/query/index.js";
 import { runMigrations } from "@/database/migrations/index.js";
 import { getCheckpointer } from "@/memory/session.js";
 import { getVectorStore } from "@/database/qdrant.js";
 import { getEmbeddingProvider } from "@/embeddings/factory.js";
 import { ensureBucket } from "@/database/s3.js";
+import { setupOtel } from "@/observability/otel.js";
 
 async function bootstrap() {
   logger.info({ env: env.NODE_ENV, port: serverConfig.port }, "Bootstrapping RAG platform");
+
+  // 0. Initialise OpenTelemetry (must be first — auto-instrumentation needs
+  //    to patch the http/pg/ioredis modules before they're required).
+  try {
+    setupOtel();
+  } catch (err) {
+    logger.warn({ err }, "OpenTelemetry setup failed; continuing without traces");
+  }
 
   // 1. Run database migrations (idempotent).
   try {
@@ -56,9 +65,11 @@ async function bootstrap() {
   }
 
   // 5. Build the Fastify server and register the query graph.
-  const server = await createServer();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (server as any).graph = queryGraph;
+  //    Use the same singleton that the routes use (getServer) so that
+  //    `server.graph` and the route-injected `request.server.graph` are
+  //    the same object.
+  const server = await getServer();
+  setQueryGraphOnServer(server, queryGraph);
 
   // 6. Start listening.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

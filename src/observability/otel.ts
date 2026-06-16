@@ -1,35 +1,90 @@
 /**
- * OpenTelemetry hooks.
+ * OpenTelemetry tracing — Phase 3 real implementation.
  *
- * Phase 1: stub. `setupOtel()` just logs a notice and returns. The real
- * exporter (OTLP gRPC/HTTP, prom-theus, etc.) and span/metric instrumentation
- * land in Phase 3.
+ * Wires the OpenTelemetry Node SDK with auto-instrumentation for
+ *   - HTTP (Fastify incoming + outgoing)
+ *   - pg
+ *   - ioredis
+ *   - dns, net
  *
- * Keeping the surface stable now means the boot sequence can wire it up
- * without future churn.
+ * Exports traces via the OTLP HTTP exporter when `OTEL_EXPORTER_OTLP_ENDPOINT`
+ * is set, otherwise falls back to a console exporter for local debugging.
+ *
+ * LangChain and LangGraph are NOT auto-instrumented (their span API is
+ * private) — we surface spans manually via the `withSpan` helper in
+ * observability/tracing.ts.
  */
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+  type SpanExporter,
+} from "@opentelemetry/sdk-trace-base";
+
+import { env } from "../config/env.js";
 import { logger } from "../shared/logger.js";
 
-let _initialized = false;
+let sdk: NodeSDK | undefined;
+let initialized = false;
 
 /**
- * Set up OpenTelemetry exporters / instrumentations.
+ * Initialise the OpenTelemetry SDK. Idempotent — calling twice is a no-op.
  *
- * Idempotent: subsequent calls are no-ops. Safe to call from the app's
- * bootstrap code.
+ * Reads `OTEL_EXPORTER_OTLP_ENDPOINT` to decide:
+ *   - set   → OTLP HTTP exporter
+ *   - unset → console exporter (prints spans to stdout in dev)
  */
 export function setupOtel(): void {
-  if (_initialized) return;
-  _initialized = true;
-  // TODO(phase-3): wire up @opentelemetry/sdk-node, register instrumentations
-  // (http, fastify, langchain, pg, ioredis), and start an OTLP exporter to the
-  // configured collector endpoint.
-  logger.info("OpenTelemetry: Phase 1 stub — no exporter configured yet");
+  if (initialized) return;
+  initialized = true;
+
+  const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const exporter: SpanExporter = otlpEndpoint
+    ? new OTLPTraceExporter({ url: otlpEndpoint })
+    : new ConsoleSpanExporter();
+
+  sdk = new NodeSDK({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+    instrumentations: [
+      getNodeAutoInstrumentations({
+        // Disable fs — too noisy in dev.
+        "@opentelemetry/instrumentation-fs": { enabled: false },
+        "@opentelemetry/instrumentation-http": { enabled: true },
+        "@opentelemetry/instrumentation-pg": { enabled: true },
+        "@opentelemetry/instrumentation-ioredis": { enabled: true },
+      }),
+    ],
+  });
+
+  try {
+    sdk.start();
+    logger.info(
+      {
+        exporter: otlpEndpoint ? "otlp-http" : "console",
+        endpoint: otlpEndpoint ?? "(stdout)",
+        env: env.NODE_ENV,
+      },
+      "OpenTelemetry SDK started",
+    );
+  } catch (err) {
+    logger.error({ err }, "Failed to start OpenTelemetry SDK");
+  }
+
+  // Graceful shutdown.
+  const shutdown = async () => {
+    try {
+      await sdk?.shutdown();
+      logger.info("OpenTelemetry SDK shut down");
+    } catch (err) {
+      logger.error({ err }, "Error shutting down OpenTelemetry");
+    }
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 }
 
-/**
- * Has `setupOtel()` already been called?
- */
 export function isOtelInitialized(): boolean {
-  return _initialized;
+  return initialized;
 }
