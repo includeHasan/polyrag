@@ -15,8 +15,8 @@
  */
 import "dotenv/config";
 import { writeFile, mkdir } from "node:fs/promises";
-import { logger } from "@/shared/logger.js";
-import { runIngestion } from "@/ingestion/pipeline.js";
+import { logger } from "@/core/shared/logger.js";
+import { runIngestion } from "@/rag/ingestion/pipeline.js";
 
 const BASE = `http://localhost:${process.env.SERVER_PORT ?? 3000}`;
 

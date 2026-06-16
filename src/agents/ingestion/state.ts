@@ -9,7 +9,7 @@ import {
   ChunkSchema,
   IngestRequestSchema,
   IngestionJobStatusSchema,
-} from "../../shared/types.js";
+} from "@/core/shared/types.js";
 
 export const IngestionStateSchema = z.object({
   request: IngestRequestSchema,

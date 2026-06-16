@@ -7,11 +7,11 @@
  * `end` is the 1st of the next month.
  */
 import type { FastifyInstance } from "fastify";
-import { getUsageMeter } from "@/observability/metering.js";
+import { getUsageMeter } from "@/platform/observability/metering.js";
 import { requireUser } from "../middleware/auth.js";
-import { AuthorizationError } from "@/shared/errors.js";
-import { logger } from "@/shared/logger.js";
-import { getTenantContext } from "@/tenancy/context.js";
+import { AuthorizationError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
+import { getTenantContext } from "@/platform/tenancy/context.js";
 
 export interface BillingQuotaResponse {
   used: number;

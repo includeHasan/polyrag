@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { setTenantContext } from "@/tenancy/context.js";
-import { tenantConfigService } from "@/tenancy/configService.js";
-import { logger } from "@/shared/logger.js";
+import { setTenantContext } from "@/platform/tenancy/context.js";
+import { tenantConfigService } from "@/platform/tenancy/configService.js";
+import { logger } from "@/core/shared/logger.js";
 
 export async function tenantContextMiddleware(
   request: FastifyRequest,

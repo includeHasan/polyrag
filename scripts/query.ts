@@ -4,8 +4,8 @@
  * Usage: npm run query -- "What is the policy on remote work?" [--session-id X]
  */
 import "dotenv/config";
-import { logger } from "@/shared/logger.js";
-import { env } from "@/config/env.js";
+import { logger } from "@/core/shared/logger.js";
+import { env } from "@/core/config/env.js";
 
 function parseArgs(argv: string[]): { query: string; sessionId?: string; stream: boolean } {
   const positional = argv.filter((a) => !a.startsWith("--"));

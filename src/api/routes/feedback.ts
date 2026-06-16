@@ -4,9 +4,9 @@
  * and acks; Phase 2 will persist to the `feedback` table in Postgres.
  */
 import type { FastifyInstance } from "fastify";
-import { FeedbackSchema } from "@/shared/types.js";
+import { FeedbackSchema } from "@/core/shared/types.js";
 import { getObservability } from "../deps.js";
-import { logger } from "@/shared/logger.js";
+import { logger } from "@/core/shared/logger.js";
 
 export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/feedback", async (request) => {

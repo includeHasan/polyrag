@@ -18,11 +18,11 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { getObservability } from "../deps.js";
-import { logger } from "@/shared/logger.js";
-import { getQdrantClient } from "@/database/qdrant.js";
-import { getVectorStore } from "@/database/qdrant.js";
-import { getEmbeddingProvider } from "@/embeddings/factory.js";
-import { env } from "@/config/env.js";
+import { logger } from "@/core/shared/logger.js";
+import { getQdrantClient } from "@/infra/database/qdrant.js";
+import { getVectorStore } from "@/infra/database/qdrant.js";
+import { getEmbeddingProvider } from "@/rag/embeddings/factory.js";
+import { env } from "@/core/config/env.js";
 
 const ReindexRequestSchema = z.object({
   documentId: z.string().min(1),

@@ -17,7 +17,7 @@ import {
   StateSchema,
 } from "@langchain/langgraph";
 import { z } from "zod";
-import { ChunkSchema } from "../../shared/types.js";
+import { ChunkSchema } from "@/core/shared/types.js";
 
 const concatReducer = <T,>(current: T[], update: T[]): T[] => [
   ...(current ?? []),

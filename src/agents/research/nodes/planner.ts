@@ -9,9 +9,9 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import { env } from "../../../config/env.js";
-import { GenerationError } from "../../../shared/errors.js";
-import { logger } from "../../../shared/logger.js";
+import { env } from "@/core/config/env.js";
+import { GenerationError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
 import type { ResearchState } from "../state.js";
 
 const SubQuestionPlanSchema = z.object({

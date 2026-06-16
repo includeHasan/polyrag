@@ -2,8 +2,8 @@
  * CLI: run database migrations.
  */
 import "dotenv/config";
-import { logger } from "@/shared/logger.js";
-import { runMigrations, migrationStatus } from "@/database/migrations/index.js";
+import { logger } from "@/core/shared/logger.js";
+import { runMigrations, migrationStatus } from "@/infra/database/migrations/index.js";
 
 async function main() {
   const status = await migrationStatus();

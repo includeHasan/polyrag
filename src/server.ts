@@ -5,17 +5,17 @@
  * the query graph. Importable for tests; `main()` runs in the main module.
  */
 import "dotenv/config";
-import { env } from "@/config/env.js";
-import { serverConfig } from "@/config/index.js";
-import { logger } from "@/shared/logger.js";
+import { env } from "@/core/config/env.js";
+import { serverConfig } from "@/core/config/index.js";
+import { logger } from "@/core/shared/logger.js";
 import { getServer, setQueryGraphOnServer } from "@/api/server.js";
 import { graph as queryGraph } from "@/agents/query/index.js";
-import { runMigrations } from "@/database/migrations/index.js";
-import { getCheckpointer } from "@/memory/session.js";
-import { getVectorStore } from "@/database/qdrant.js";
-import { getEmbeddingProvider } from "@/embeddings/factory.js";
-import { ensureBucket } from "@/database/s3.js";
-import { setupOtel } from "@/observability/otel.js";
+import { runMigrations } from "@/infra/database/migrations/index.js";
+import { getCheckpointer } from "@/platform/memory/session.js";
+import { getVectorStore } from "@/infra/database/qdrant.js";
+import { getEmbeddingProvider } from "@/rag/embeddings/factory.js";
+import { ensureBucket } from "@/infra/database/s3.js";
+import { setupOtel } from "@/platform/observability/otel.js";
 
 async function bootstrap() {
   logger.info({ env: env.NODE_ENV, port: serverConfig.port }, "Bootstrapping RAG platform");

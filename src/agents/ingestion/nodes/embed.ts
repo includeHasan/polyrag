@@ -5,10 +5,10 @@
  * We mutate a copy of each chunk so the `ChunkSchema.embedding` field
  * is populated before they reach the store.
  */
-import { logger } from "../../../shared/logger.js";
-import { IngestionError } from "../../../shared/errors.js";
-import { getEmbeddingProvider } from "../../../embeddings/factory.js";
-import type { Chunk } from "../../../shared/types.js";
+import { logger } from "@/core/shared/logger.js";
+import { IngestionError } from "@/core/shared/errors.js";
+import { getEmbeddingProvider } from "@/rag/embeddings/factory.js";
+import type { Chunk } from "@/core/shared/types.js";
 import type { IngestionState } from "../state.js";
 
 export async function embedNode(

@@ -25,9 +25,9 @@ import {
   IngestionError,
   RagError,
   RetrievalError,
-} from "@/shared/errors.js";
+} from "@/core/shared/errors.js";
 import { getObservability } from "../deps.js";
-import { logger } from "@/shared/logger.js";
+import { logger } from "@/core/shared/logger.js";
 
 export interface ErrorEnvelope {
   error: {

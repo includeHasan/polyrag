@@ -4,10 +4,10 @@
  * Uses the platform-wide `Chunker` factory, which selects the strategy
  * declared in `env.CHUNKER_STRATEGY` (fixed / recursive / semantic / agentic).
  */
-import { logger } from "../../../shared/logger.js";
-import { IngestionError } from "../../../shared/errors.js";
-import { getChunker } from "../../../chunking/factory.js";
-import type { Chunk, Document } from "../../../shared/types.js";
+import { logger } from "@/core/shared/logger.js";
+import { IngestionError } from "@/core/shared/errors.js";
+import { getChunker } from "@/rag/chunking/factory.js";
+import type { Chunk, Document } from "@/core/shared/types.js";
 import type { IngestionState } from "../state.js";
 
 export async function chunkNode(

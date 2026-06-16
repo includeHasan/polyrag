@@ -2,9 +2,9 @@
  * `load` node — pick a `DataConnector` from the registry for the request's
  * `source` kind, connect, and pull a single `Document`.
  */
-import { logger } from "../../../shared/logger.js";
-import { IngestionError } from "../../../shared/errors.js";
-import { getConnector } from "../../../ingestion/connectors/registry.js";
+import { logger } from "@/core/shared/logger.js";
+import { IngestionError } from "@/core/shared/errors.js";
+import { getConnector } from "@/rag/ingestion/connectors/registry.js";
 import type { IngestionState } from "../state.js";
 
 export async function loadNode(

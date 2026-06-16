@@ -5,10 +5,10 @@
  * Delegates the actual prompt-side packing to the platform-wide
  * `ContextBuilder` so this node stays thin.
  */
-import { logger } from "../../../shared/logger.js";
-import { RetrievalError } from "../../../shared/errors.js";
-import { ContextBuilder } from "../../../context/builder.js";
-import type { Source } from "../../../shared/types.js";
+import { logger } from "@/core/shared/logger.js";
+import { RetrievalError } from "@/core/shared/errors.js";
+import { ContextBuilder } from "@/rag/context/builder.js";
+import type { Source } from "@/core/shared/types.js";
 import type { QueryState } from "../state.js";
 
 /** Deduplicate sources by chunkId, keeping the first occurrence. */

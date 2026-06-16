@@ -14,13 +14,13 @@
  * Latency cost: one extra ChatOpenAI call per query (gpt-4o-mini, ~300ms).
  * Disable in dev by setting `EVALUATION_ENABLED=false` in the env.
  */
-import { logger } from "../../../shared/logger.js";
-import { GenerationError } from "../../../shared/errors.js";
-import { env } from "../../../config/env.js";
-import { LLMJudge } from "../../../evaluation/llmJudge.js";
-import type { Source } from "../../../shared/types.js";
+import { logger } from "@/core/shared/logger.js";
+import { GenerationError } from "@/core/shared/errors.js";
+import { env } from "@/core/config/env.js";
+import { LLMJudge } from "@/platform/evaluation/llmJudge.js";
+import type { Source } from "@/core/shared/types.js";
 import { resolveNodeConfig } from "./_config.js";
-import { getLLM } from "@/llm/factory.js";
+import { getLLM } from "@/infra/llm/factory.js";
 
 const EVAL_THRESHOLD = 3; // 1-5 Likert; 3 = acceptable
 

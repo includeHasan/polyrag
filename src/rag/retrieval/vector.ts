@@ -1,0 +1,71 @@
+/**
+ * VectorRetriever — embeds the query and runs a Qdrant similarity search.
+ *
+ * The Qdrant `VectorStore` factory is imported from `@/infra/database/qdrant.js`.
+ * The retriever merges any filters coming from `QueryUnderstanding.filters`
+ * with the `filter` passed in the caller's options (options win on key
+ * conflict because they are more specific to this call).
+ */
+import { getEmbeddingProvider } from "@/rag/embeddings/factory.js";
+import { getVectorStore } from "@/infra/database/qdrant.js";
+import { RetrievalError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
+import type { Chunk, QueryUnderstanding } from "@/core/shared/types.js";
+import { BaseRetriever, type RetrieveOptions } from "./base.js";
+
+export class VectorRetriever extends BaseRetriever {
+  readonly name = "vector";
+
+  constructor(private readonly topKOverride?: number) {
+    super();
+  }
+
+  async retrieve(
+    query: string,
+    understanding: QueryUnderstanding,
+    options?: RetrieveOptions,
+  ): Promise<Chunk[]> {
+    const topK = options?.topK ?? this.topKOverride ?? 10;
+    const filter = this.mergeFilters(understanding.filters, options?.filter);
+
+    try {
+      const embeddings = getEmbeddingProvider();
+      const vector = await embeddings.embed(query);
+
+      const store = getVectorStore();
+      const hits = await store.search(vector, topK, filter);
+
+      logger.debug(
+        { retriever: this.name, topK, hits: hits.length, filter },
+        "VectorRetriever complete",
+      );
+
+      return hits.map((h: { chunk: import("@/core/shared/types.js").Chunk; score: number }) => h.chunk);
+    } catch (err) {
+      if (err instanceof RetrievalError) throw err;
+      throw new RetrievalError(
+        `VectorRetriever failed for query of length ${query.length}: ${(err as Error).message}`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Combine the always-applied understanding filters with the optional
+   * per-call options filter. Options take precedence on key conflicts.
+   * The result is a Qdrant `must` filter so tenantId and any other keys
+   * are enforced server-side.
+   */
+  private mergeFilters(
+    base: Record<string, unknown> | undefined,
+    extra: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined {
+    const flat: Record<string, unknown> = { ...(base ?? {}), ...(extra ?? {}) };
+    if (Object.keys(flat).length === 0) return undefined;
+    const must = Object.entries(flat).map(([key, value]) => ({
+      key,
+      match: { value },
+    }));
+    return { must };
+  }
+}

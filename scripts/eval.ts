@@ -7,8 +7,8 @@
  *   { "query": "...", "groundTruthChunks": ["chunkId1", "chunkId2"], "expectedAnswer"?: "..." }
  */
 import "dotenv/config";
-import { logger } from "@/shared/logger.js";
-import { runEvaluation } from "@/evaluation/harness.js";
+import { logger } from "@/core/shared/logger.js";
+import { runEvaluation } from "@/platform/evaluation/harness.js";
 import { readFile } from "node:fs/promises";
 
 function parseArgs(argv: string[]): { datasetPath: string } {

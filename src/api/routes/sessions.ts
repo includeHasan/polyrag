@@ -13,8 +13,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getServer } from "@/api/server.js";
-import { getStateHistory, type StateSnapshot } from "@/memory/checkpoint.js";
-import { logger } from "@/shared/logger.js";
+import { getStateHistory, type StateSnapshot } from "@/platform/memory/checkpoint.js";
+import { logger } from "@/core/shared/logger.js";
 
 const ParamsSchema = z.object({
   id: z.string().min(1, "session id (thread_id) is required"),

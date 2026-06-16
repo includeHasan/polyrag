@@ -13,9 +13,9 @@
  * through (matches the `RateLimiter.check()` fail-open contract).
  */
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { getRateLimiter, RateLimiter, type RateLimitDecision } from "@/security/rateLimit.js";
-import { logger } from "@/shared/logger.js";
-import { getTenantContext } from "@/tenancy/context.js";
+import { getRateLimiter, RateLimiter, type RateLimitDecision } from "@/platform/security/rateLimit.js";
+import { logger } from "@/core/shared/logger.js";
+import { getTenantContext } from "@/platform/tenancy/context.js";
 
 export interface RateLimitPreHandlerOptions {
   /** Logical action name, e.g. "query", "ingest". Defaults to the URL path. */

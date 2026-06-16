@@ -1,7 +1,7 @@
-import { getTenantContext } from "@/tenancy/context.js"
-import { tenantConfigService } from "@/tenancy/configService.js"
-import { buildGlobalDefaults } from "@/tenancy/resolve.js"
-import type { ResolvedTenantConfig } from "@/tenancy/resolve.js"
+import { getTenantContext } from "@/platform/tenancy/context.js"
+import { tenantConfigService } from "@/platform/tenancy/configService.js"
+import { buildGlobalDefaults } from "@/platform/tenancy/resolve.js"
+import type { ResolvedTenantConfig } from "@/platform/tenancy/resolve.js"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function resolveNodeConfig(state: Record<string, any>): ResolvedTenantConfig {

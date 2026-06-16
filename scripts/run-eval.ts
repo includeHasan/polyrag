@@ -12,12 +12,12 @@
 import "dotenv/config";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { logger } from "@/shared/logger.js";
-import { runIngestion } from "@/ingestion/pipeline.js";
+import { logger } from "@/core/shared/logger.js";
+import { runIngestion } from "@/rag/ingestion/pipeline.js";
 import { getQueryGraph } from "@/api/deps.js";
 import { graph as queryGraph } from "@/agents/query/index.js";
-import { runEvaluation, type EvaluationSample } from "@/evaluation/harness.js";
-import type { Chunk, QueryResponse } from "@/shared/types.js";
+import { runEvaluation, type EvaluationSample } from "@/platform/evaluation/harness.js";
+import type { Chunk, QueryResponse } from "@/core/shared/types.js";
 
 const FIXTURES_DIR = "docs/fixtures";
 const DATASET_PATH = "eval/datasets/remote-work.jsonl";

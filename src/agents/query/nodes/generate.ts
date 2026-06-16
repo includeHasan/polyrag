@@ -1,8 +1,8 @@
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
-import { logger } from "../../../shared/logger.js";
-import { GenerationError } from "../../../shared/errors.js";
-import { getPromptFor } from "@/prompts/registry.js";
-import { getLLM } from "@/llm/factory.js";
+import { logger } from "@/core/shared/logger.js";
+import { GenerationError } from "@/core/shared/errors.js";
+import { getPromptFor } from "@/agents/prompts/registry.js";
+import { getLLM } from "@/infra/llm/factory.js";
 import { resolveNodeConfig } from "./_config.js";
 import type { QueryState } from "../state.js";
 

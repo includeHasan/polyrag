@@ -4,9 +4,9 @@
  * Usage: npm run ingest -- <path-or-url> [--tags tag1,tag2] [--department X]
  */
 import "dotenv/config";
-import { logger } from "@/shared/logger.js";
-import { IngestRequestSchema, type IngestRequest } from "@/shared/types.js";
-import { runIngestion } from "@/ingestion/pipeline.js";
+import { logger } from "@/core/shared/logger.js";
+import { IngestRequestSchema, type IngestRequest } from "@/core/shared/types.js";
+import { runIngestion } from "@/rag/ingestion/pipeline.js";
 
 function parseArgs(argv: string[]): IngestRequest {
   const positional = argv.filter((a) => !a.startsWith("--"));

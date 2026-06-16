@@ -6,7 +6,7 @@
  *
  * Strategy:
  *   - Type-only interfaces live here, re-exported as `* as <Name>` so
- *     route files can `import { Foo } from "../deps.js"` without touching
+ *     route files can `import { Foo } from "@/deps.js"` without touching
  *     cross-module files.
  *   - Runtime calls go through `await import("@/...path")` cast through
  *     the local interfaces. This way the route code type-checks even
@@ -17,7 +17,7 @@
  * this file can be deleted.
  */
 import type { FastifyInstance } from "fastify";
-import type { Chunk, Document, Source } from "@/shared/types.js";
+import type { Chunk, Document, Source } from "@/core/shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Observability
@@ -39,7 +39,7 @@ export interface ObservabilityModule {
 let _observability: ObservabilityModule | null = null;
 export async function getObservability(): Promise<ObservabilityModule> {
   if (_observability) return _observability;
-  _observability = (await import("@/observability/metrics.js")) as unknown as ObservabilityModule;
+  _observability = (await import("@/platform/observability/metrics.js")) as unknown as ObservabilityModule;
   return _observability;
 }
 
@@ -54,7 +54,7 @@ export interface MemoryModule {
 let _memory: MemoryModule | null = null;
 export async function getMemory(): Promise<MemoryModule> {
   if (_memory) return _memory;
-  _memory = (await import("@/memory/session.js")) as unknown as MemoryModule;
+  _memory = (await import("@/platform/memory/session.js")) as unknown as MemoryModule;
   return _memory;
 }
 
@@ -75,7 +75,7 @@ export interface IngestionModule {
 let _ingestion: IngestionModule | null = null;
 export async function getIngestion(): Promise<IngestionModule> {
   if (_ingestion) return _ingestion;
-  _ingestion = (await import("@/ingestion/pipeline.js")) as unknown as IngestionModule;
+  _ingestion = (await import("@/rag/ingestion/pipeline.js")) as unknown as IngestionModule;
   return _ingestion;
 }
 
@@ -103,11 +103,11 @@ let _retrieval: RetrievalModule | null = null;
 export async function getRetrieval(): Promise<RetrievalModule> {
   if (_retrieval) return _retrieval;
   // Import the actual factory function — `getRetriever()` — from the
-  // retrieval layer. (No `src/retrieval/index.ts` barrel exists; the
+  // retrieval layer. (No `src/rag/retrieval/index.ts` barrel exists; the
   // factory is the single public entry point.) The shape returned here
-  // matches the `Retriever` interface in `@/shared/interfaces.js`.
+  // matches the `Retriever` interface in `@/core/shared/interfaces.js`.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mod = await import("@/retrieval/factory.js") as any;
+  const mod = await import("@/rag/retrieval/factory.js") as any;
   _retrieval = {
     getRetriever: async () => mod.getRetriever(),
   };
@@ -142,7 +142,7 @@ export interface EvaluationModule {
 let _evaluation: EvaluationModule | null = null;
 export async function getEvaluation(): Promise<EvaluationModule> {
   if (_evaluation) return _evaluation;
-  _evaluation = (await import("@/evaluation/harness.js")) as unknown as EvaluationModule;
+  _evaluation = (await import("@/platform/evaluation/harness.js")) as unknown as EvaluationModule;
   return _evaluation;
 }
 

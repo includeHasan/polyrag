@@ -8,10 +8,10 @@
  */
 import { ChatOpenAI } from "@langchain/openai";
 import { AIMessage, SystemMessage } from "@langchain/core/messages";
-import { env } from "../../../config/env.js";
-import { GenerationError } from "../../../shared/errors.js";
-import { logger } from "../../../shared/logger.js";
-import type { Chunk, Source } from "../../../shared/types.js";
+import { env } from "@/core/config/env.js";
+import { GenerationError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
+import type { Chunk, Source } from "@/core/shared/types.js";
 import type { ResearchState } from "../state.js";
 
 let llmSingleton: ChatOpenAI | undefined;

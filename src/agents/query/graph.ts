@@ -6,7 +6,7 @@
  * tests) and a recursion limit matching `env.RECURSION_LIMIT`.
  */
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/core/shared/logger.js";
 import { QueryStateSchema, type QueryState } from "./state.js";
 import { understandNode } from "./nodes/understand.js";
 import { retrieveNode } from "./nodes/retrieve.js";
@@ -14,7 +14,7 @@ import { rerankNode } from "./nodes/rerank.js";
 import { buildContextNode } from "./nodes/buildContext.js";
 import { generateNode } from "./nodes/generate.js";
 import { evaluateNode } from "./nodes/evaluate.js";
-import { getCheckpointer } from "../../memory/session.js";
+import { getCheckpointer } from "@/platform/memory/session.js";
 
 export interface CreateQueryGraphOptions {
   /** Override the checkpointer (used by tests). */

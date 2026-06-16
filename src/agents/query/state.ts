@@ -20,7 +20,7 @@ import {
   ChunkSchema,
   QueryUnderstandingSchema,
   SourceSchema,
-} from "../../shared/types.js";
+} from "@/core/shared/types.js";
 
 const concatReducer = <T,>(current: T[], update: T[]): T[] => [
   ...(current ?? []),

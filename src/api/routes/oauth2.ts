@@ -24,13 +24,13 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { PrismaClient } from "@prisma/client";
-import { OAuth2Provider, type OAuthProfile } from "@/security/oauth2.js";
-import { signToken } from "@/security/auth.js";
-import { logger } from "@/shared/logger.js";
+import { OAuth2Provider, type OAuthProfile } from "@/platform/security/oauth2.js";
+import { signToken } from "@/platform/security/auth.js";
+import { logger } from "@/core/shared/logger.js";
 import {
   AuthorizationError,
   ConfigurationError,
-} from "@/shared/errors.js";
+} from "@/core/shared/errors.js";
 
 const SUPPORTED = ["google", "github"] as const;
 type SupportedProvider = (typeof SUPPORTED)[number];

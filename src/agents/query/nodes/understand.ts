@@ -6,9 +6,9 @@
  * detection so the rest of the graph is wired up end-to-end.
  */
 import { HumanMessage } from "@langchain/core/messages";
-import { logger } from "../../../shared/logger.js";
-import { QueryUnderstandingSchema } from "../../../shared/types.js";
-import { GenerationError } from "../../../shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
+import { QueryUnderstandingSchema } from "@/core/shared/types.js";
+import { GenerationError } from "@/core/shared/errors.js";
 import type { QueryState } from "../state.js";
 
 const FACTUAL_PATTERN = /(\?|what|who|where|when|which|how\b|why\b)/i;

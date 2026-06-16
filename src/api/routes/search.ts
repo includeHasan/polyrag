@@ -10,10 +10,10 @@ import {
   type Chunk,
   type QueryUnderstanding,
   type Source,
-} from "@/shared/types.js";
+} from "@/core/shared/types.js";
 import { getObservability, getRetrieval } from "../deps.js";
-import { RetrievalError } from "@/shared/errors.js";
-import type { Retriever as RetrieverInterface } from "@/shared/interfaces.js";
+import { RetrievalError } from "@/core/shared/errors.js";
+import type { Retriever as RetrieverInterface } from "@/core/shared/interfaces.js";
 
 const SearchRequestSchema = z.object({
   query: z.string().min(1),

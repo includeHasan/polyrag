@@ -4,9 +4,9 @@
  *
  * Skips work cleanly when the reranker is disabled or there are no chunks.
  */
-import { logger } from "../../../shared/logger.js";
-import { RetrievalError } from "../../../shared/errors.js";
-import { getReranker } from "@/reranking/factory.js";
+import { logger } from "@/core/shared/logger.js";
+import { RetrievalError } from "@/core/shared/errors.js";
+import { getReranker } from "@/rag/reranking/factory.js";
 import { resolveNodeConfig } from "./_config.js";
 import type { QueryState } from "../state.js";
 

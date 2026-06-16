@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
-import { requirePermission, requireSameTenant } from "@/security/rbac.js";
-import { AuthorizationError } from "@/shared/errors.js";
-import { logger } from "@/shared/logger.js";
-import { tenantConfigService } from "@/tenancy/configService.js";
-import type { TenantConfigOverrides } from "@/tenancy/resolve.js";
-import type { UserPayload } from "@/security/auth.js";
+import { requirePermission, requireSameTenant } from "@/platform/security/rbac.js";
+import { AuthorizationError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
+import { tenantConfigService } from "@/platform/tenancy/configService.js";
+import type { TenantConfigOverrides } from "@/platform/tenancy/resolve.js";
+import type { UserPayload } from "@/platform/security/auth.js";
 
 let _prisma: PrismaClient | undefined;
 

@@ -8,10 +8,10 @@
  * `ReducedValue` reducer on `findings` concatenates results from all
  * parallel searcher instances into a single list for the synthesizer.
  */
-import { getRetriever } from "../../../retrieval/factory.js";
-import { GenerationError, RetrievalError } from "../../../shared/errors.js";
-import { logger } from "../../../shared/logger.js";
-import type { Chunk, QueryUnderstanding } from "../../../shared/types.js";
+import { getRetriever } from "@/rag/retrieval/factory.js";
+import { GenerationError, RetrievalError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
+import type { Chunk, QueryUnderstanding } from "@/core/shared/types.js";
 import type { ResearchState } from "../state.js";
 
 /** Empty QueryUnderstanding used as a default for the retriever call. */

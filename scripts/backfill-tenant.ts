@@ -1,6 +1,6 @@
 import "dotenv/config";
 import pg from "pg";
-import { logger } from "@/shared/logger.js";
+import { logger } from "@/core/shared/logger.js";
 
 const TABLES: string[] = [
   "users",

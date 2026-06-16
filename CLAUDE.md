@@ -43,23 +43,38 @@ npx @langchain/langgraph-cli up    # :8123
 - `vitest.config.ts` and the `test`/`test:unit`/`test:integration` scripts point at `src/tests/**`, **but that directory does not currently exist** — there are no `*.test.ts` files, so `npm test` finds nothing.
 - The actual end-to-end suite is `scripts/e2e-test.ts` (run with `tsx scripts/e2e-test.ts`). It ingests the fixtures in `docs/fixtures`, runs a battery of query/auth/RBAC/ACL/HITL cases against a **live server + full infra**, and writes a report to `eval/reports/`. It is not wired to an npm script. Bring up `npm run podman:up` + `npm run dev` first.
 
+## Module layout (domain-grouped)
+
+`src/` is grouped into 6 domains plus the `server.ts` entry point. Imports use the `@/<domain>/...` alias (`@/` → `src/`):
+
+| Domain | Holds | Notes |
+|---|---|---|
+| `core/` | `shared` (types, interfaces, errors, logger), `config` | Foundation; depended on by everything. |
+| `infra/` | `database` (Postgres/Qdrant/Redis/S3/Elasticsearch + migrations), `llm` | External-service clients. |
+| `rag/` | `ingestion`, `processing`, `chunking`, `embeddings`, `retrieval`, `reranking`, `context` | The RAG pipeline stages. |
+| `agents/` | `query`, `ingestion`, `research` graphs + `prompts` | LangGraph graphs. **`langgraph.json` points here** (`./src/agents/<name>/index.ts:graph`) — keep these paths stable. |
+| `platform/` | `security`, `tenancy`, `observability`, `memory`, `evaluation` | Cross-cutting concerns. |
+| `api/` | Fastify `routes` + `middleware` | HTTP surface. |
+
 ## Conventions (enforced by review, not tooling)
 
-- **ESM + strict TypeScript.** Relative imports MUST use `.js` extensions (e.g. `import { x } from "./foo.js"`) even though the source is `.ts`. `@/` is a path alias for `src/`.
-- **Zod at every external boundary** — env (`src/config/env.ts`), request bodies, and LangGraph state schemas. The env loader fails fast at startup on a missing/malformed var.
-- **Errors:** throw `RagError` subclasses (`src/shared/`), never raw `Error`.
-- **Logging:** `pino` structured logger (`src/shared/logger.ts`), child loggers per request/job.
-- **Pluggability:** every swappable component implements an interface in `src/shared/interfaces.ts` (`DataConnector`, `Chunker`, `EmbeddingProvider`, `VectorStore`, `Retriever`, `Reranker`, `ContextBuilder`, `LLMProvider`, `EvaluationMetric`). Concrete impls live in the matching `src/<concern>/` folder and are built by a `*/factory.ts` from config. Adding a backend = implement interface → register in factory → add env flag.
+- **ESM + strict TypeScript.** Relative imports MUST use `.js` extensions (e.g. `import { x } from "./foo.js"`) even though the source is `.ts`. Cross-domain imports use the `@/<domain>/...` alias; intra-module imports stay relative.
+- **Zod at every external boundary** — env (`src/core/config/env.ts`), request bodies, and LangGraph state schemas. The env loader fails fast at startup on a missing/malformed var.
+- **Errors:** throw `RagError` subclasses (`src/core/shared/errors.ts`), never raw `Error`.
+- **Logging:** `pino` structured logger (`src/core/shared/logger.ts`), child loggers per request/job.
+- **Pluggability:** every swappable component implements an interface in `src/core/shared/interfaces.ts` (`DataConnector`, `Chunker`, `EmbeddingProvider`, `VectorStore`, `Retriever`, `Reranker`, `ContextBuilder`, `LLMProvider`, `EvaluationMetric`). Concrete impls live in the matching `src/rag/<concern>/` folder and are built by a `*/factory.ts` from config. Factories are **per-tenant-config-keyed** (see `src/core/shared/keyedCache.ts`), not global singletons. Adding a backend = implement interface → register in factory → add env flag.
 
 ## Architecture quick map
 
 - **Query path** = a 6-node LangGraph StateGraph (`src/agents/query/graph.ts`): `understand → retrieve → rerank → buildContext → generate → evaluate`. Checkpointed by `PostgresSaver` keyed on `thread_id = sessionId` for multi-turn memory.
-- **Ingestion path** = `src/ingestion/pipeline.ts` (`runIngestion`): connector → cleanText → parseSections → extractMetadata → chunk → embed (Redis-cached) → upsert Qdrant → BM25 index → KG extraction → persist Postgres + S3. BM25 and KG steps are best-effort (failures logged, don't abort).
-- **Storage roles:** Qdrant = vectors; Postgres = metadata/RBAC/ACL/checkpoints/eval/feedback (accessed via **both** `pg` and Prisma — they coexist); Redis = embedding cache + BullMQ queue + rate-limit counters; S3/MinIO = raw blobs; Elasticsearch = optional keyword leg; in-process BM25 (`src/retrieval/bm25Index.ts`) persisted to disk.
-- **API:** Fastify routes in `src/api/routes/`, registered via `routes/index.ts`; middleware (auth, RBAC, rate limit) in `src/api/middleware/`.
+- **Ingestion path** = `src/rag/ingestion/pipeline.ts` (`runIngestion`): connector → cleanText → parseSections → extractMetadata → chunk → embed (Redis-cached) → upsert Qdrant → BM25 index → KG extraction → persist Postgres + S3. BM25 and KG steps are best-effort (failures logged, don't abort).
+- **Multi-tenancy:** every request carries a tenant context (`src/platform/tenancy/`) via `AsyncLocalStorage`; behavior (models, prompts, chunking, retrieval, quotas) is resolved per tenant from `TenantConfigService`. Storage is shared with a mandatory `tenantId` filter enforced by `assertTenantFilter` (`src/platform/tenancy/guard.ts`).
+- **Storage roles:** Qdrant = vectors; Postgres = metadata/RBAC/ACL/checkpoints/eval/feedback (accessed via **both** `pg` and Prisma — they coexist); Redis = embedding cache + BullMQ queue + rate-limit counters; S3/MinIO = raw blobs; Elasticsearch = optional keyword leg; in-process BM25 (`src/rag/retrieval/bm25Index.ts`) persisted to disk.
+- **API:** Fastify routes in `src/api/routes/` (incl. `routes/admin/` for tenant provisioning), registered via `routes/index.ts`; middleware (auth, tenant context, RBAC, rate limit) in `src/api/middleware/`.
 
 ## Gotchas
 
 - **Qdrant runs two ways:** `npm run podman:up` starts a `rag-qdrant` container on :6333, but the repo also ships a local binary `bin/qdrant.exe` (and a `.qdrant-initialized` marker) for running it natively on Windows. Pick one — don't run both on :6333.
 - Many features are phased; `docs/ARCHITECTURE.md` §10 lists deliberate constraints (BM25 not shared across replicas, no PII redaction, full re-embed on reindex, multi-tenant isolation not fully enforced). Check there before assuming something is a bug.
 - Prisma schema is at `prisma/schema.prisma` (assembled from `prisma/models/` via `npm run prisma:build`); `DATABASE_URL` must stay in sync with the `POSTGRES_*` vars in `.env`.
+- The `src/` tree is **domain-grouped** (see Module layout above). When moving files between domains, cross-domain imports use `@/<domain>/...`; `langgraph.json` graph paths under `src/agents/` must stay stable.

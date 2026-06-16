@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { PrismaClient } from "@prisma/client";
-import { requirePermission } from "@/security/rbac.js";
-import type { UserPayload } from "@/security/auth.js";
-import { AuthorizationError } from "@/shared/errors.js";
-import { logger } from "@/shared/logger.js";
+import { requirePermission } from "@/platform/security/rbac.js";
+import type { UserPayload } from "@/platform/security/auth.js";
+import { AuthorizationError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
 
 let _prisma: PrismaClient | undefined;
 

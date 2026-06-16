@@ -9,12 +9,12 @@
  */
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { IngestRequestSchema } from "@/shared/types.js";
+import { IngestRequestSchema } from "@/core/shared/types.js";
 import { getIngestion, getObservability } from "../deps.js";
-import { AuthorizationError, IngestionError } from "@/shared/errors.js";
-import { requirePermission } from "@/security/rbac.js";
-import type { UserPayload } from "@/security/auth.js";
-import { tenantConfigService } from "@/tenancy/configService.js";
+import { AuthorizationError, IngestionError } from "@/core/shared/errors.js";
+import { requirePermission } from "@/platform/security/rbac.js";
+import type { UserPayload } from "@/platform/security/auth.js";
+import { tenantConfigService } from "@/platform/tenancy/configService.js";
 
 interface InlineIngestResponse {
   jobId: "inline";

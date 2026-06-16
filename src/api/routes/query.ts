@@ -24,16 +24,16 @@ import {
   type QueryRequest,
   type QueryResponse,
   type Source,
-} from "@/shared/types.js";
+} from "@/core/shared/types.js";
 import { getObservability, getQueryGraph } from "../deps.js";
 import { getServer } from "../server.js";
-import { GenerationError, AuthError } from "@/shared/errors.js";
-import { extractCitations } from "@/context/citation.js";
+import { GenerationError, AuthError } from "@/core/shared/errors.js";
+import { extractCitations } from "@/rag/context/citation.js";
 import { rateLimitPreHandler } from "../middleware/rateLimit.js";
-import { getRateLimiter, RateLimiter } from "@/security/rateLimit.js";
-import { getUsageMeter } from "@/observability/metering.js";
-import { logger } from "@/shared/logger.js";
-import { getTenantContext } from "@/tenancy/context.js";
+import { getRateLimiter, RateLimiter } from "@/platform/security/rateLimit.js";
+import { getUsageMeter } from "@/platform/observability/metering.js";
+import { logger } from "@/core/shared/logger.js";
+import { getTenantContext } from "@/platform/tenancy/context.js";
 
 // Allow handlers to push through `reply.hijack()` and stream SSE without
 // Fastify re-serialising the body.

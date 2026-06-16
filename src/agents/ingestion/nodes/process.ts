@@ -2,11 +2,11 @@
  * `process` node — clean raw text, parse structural sections, enrich with
  * document-level metadata.
  */
-import { logger } from "../../../shared/logger.js";
-import { IngestionError } from "../../../shared/errors.js";
-import { cleanText } from "../../../processing/clean.js";
-import { parseSections } from "../../../processing/parse.js";
-import { extractMetadata } from "../../../processing/metadata.js";
+import { logger } from "@/core/shared/logger.js";
+import { IngestionError } from "@/core/shared/errors.js";
+import { cleanText } from "@/rag/processing/clean.js";
+import { parseSections } from "@/rag/processing/parse.js";
+import { extractMetadata } from "@/rag/processing/metadata.js";
 import type { IngestionState } from "../state.js";
 
 export async function processNode(

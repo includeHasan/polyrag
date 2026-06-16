@@ -12,8 +12,8 @@
  * single aggregated list.
  */
 import { END, Send, START, StateGraph } from "@langchain/langgraph";
-import { logger } from "../../shared/logger.js";
-import { getCheckpointer } from "../../memory/session.js";
+import { logger } from "@/core/shared/logger.js";
+import { getCheckpointer } from "@/platform/memory/session.js";
 import { ResearchStateSchema } from "./state.js";
 import { plannerNode } from "./nodes/planner.js";
 import { searcherNode } from "./nodes/searcher.js";

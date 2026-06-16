@@ -6,14 +6,14 @@
  * state if they want.
  */
 import { END, START, StateGraph } from "@langchain/langgraph";
-import { logger } from "../../shared/logger.js";
+import { logger } from "@/core/shared/logger.js";
 import { IngestionStateSchema, type IngestionState } from "./state.js";
 import { loadNode } from "./nodes/load.js";
 import { processNode } from "./nodes/process.js";
 import { chunkNode } from "./nodes/chunk.js";
 import { embedNode } from "./nodes/embed.js";
 import { storeNode } from "./nodes/store.js";
-import { getCheckpointer } from "../../memory/session.js";
+import { getCheckpointer } from "@/platform/memory/session.js";
 
 export interface CreateIngestionGraphOptions {
   checkpointer?: unknown;

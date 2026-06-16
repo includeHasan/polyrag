@@ -2,9 +2,9 @@
  * `store` node — persist embedded chunks to the vector store and mark
  * the job complete.
  */
-import { logger } from "../../../shared/logger.js";
-import { IngestionError } from "../../../shared/errors.js";
-import { getVectorStore } from "../../../database/qdrant.js";
+import { logger } from "@/core/shared/logger.js";
+import { IngestionError } from "@/core/shared/errors.js";
+import { getVectorStore } from "@/infra/database/qdrant.js";
 import type { IngestionState } from "../state.js";
 
 export async function storeNode(

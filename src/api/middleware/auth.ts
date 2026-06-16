@@ -5,13 +5,13 @@
  * request requires authentication.
  *
  * Uses Node's built-in `crypto` to verify HS256 signatures against the
- * `JWT_SECRET` from `@/config/env.js`. No external dependency required.
+ * `JWT_SECRET` from `@/core/config/env.js`. No external dependency required.
  */
 import type { FastifyRequest, FastifyReply } from "fastify";
 import crypto from "node:crypto";
-import { env } from "@/config/env.js";
-import { AuthError } from "@/shared/errors.js";
-import { logger } from "@/shared/logger.js";
+import { env } from "@/core/config/env.js";
+import { AuthError } from "@/core/shared/errors.js";
+import { logger } from "@/core/shared/logger.js";
 
 /** Shape of the decoded JWT payload. Routes are free to extend it. */
 export interface AuthUser {

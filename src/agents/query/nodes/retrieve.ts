@@ -12,20 +12,20 @@
  *   - After retrieval, `filterChunksForUser` is applied to enforce
  *     per-document ACLs for non-admin users.
  */
-import { logger } from "../../../shared/logger.js";
-import { RetrievalError } from "../../../shared/errors.js";
-import type { Chunk, QueryUnderstanding, Source } from "../../../shared/types.js";
-import { getRetriever } from "@/retrieval/factory.js";
+import { logger } from "@/core/shared/logger.js";
+import { RetrievalError } from "@/core/shared/errors.js";
+import type { Chunk, QueryUnderstanding, Source } from "@/core/shared/types.js";
+import { getRetriever } from "@/rag/retrieval/factory.js";
 import { resolveNodeConfig } from "./_config.js";
-import type { ResolvedTenantConfig } from "@/tenancy/resolve.js";
-import { getVectorStore } from "../../../database/qdrant.js";
-import { getEmbeddingProvider } from "../../../embeddings/factory.js";
-import { VectorRetriever } from "../../../retrieval/vector.js";
+import type { ResolvedTenantConfig } from "@/platform/tenancy/resolve.js";
+import { getVectorStore } from "@/infra/database/qdrant.js";
+import { getEmbeddingProvider } from "@/rag/embeddings/factory.js";
+import { VectorRetriever } from "@/rag/retrieval/vector.js";
 import {
   filterChunksForUser,
   getAllowedDocumentIds,
-} from "../../../security/documentPerms.js";
-import { hasRole } from "../../../security/rbac.js";
+} from "@/platform/security/documentPerms.js";
+import { hasRole } from "@/platform/security/rbac.js";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { QueryState } from "../state.js";
 
